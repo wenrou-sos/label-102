@@ -208,10 +208,23 @@ export function getDailyStatistics(date) {
     })
   })
 
+  const peakStart = PEAK_START_HOUR * 60
+  const peakEnd = PEAK_END_HOUR * 60
+  const peakTotalMinutes = (peakEnd - peakStart) * halls.length
+
+  let peakUsedMinutes = 0
+  dayBookings.forEach(booking => {
+    const bookingStart = timeToMinutes(booking.startTime)
+    const bookingEnd = timeToMinutes(booking.endTime)
+    const overlapStart = Math.max(bookingStart, peakStart)
+    const overlapEnd = Math.min(bookingEnd, peakEnd)
+    if (overlapEnd > overlapStart) {
+      peakUsedMinutes += (overlapEnd - overlapStart)
+    }
+  })
+
   const peakBookings = dayBookings.filter(b => isPeakHour(b.startTime)).length
-  const peakHours = PEAK_END_HOUR - PEAK_START_HOUR
-  const totalSlots = halls.length * peakHours
-  const peakUsageRate = totalBookings > 0 ? ((peakBookings / totalSlots) * 100).toFixed(1) : 0
+  const peakUsageRate = peakTotalMinutes > 0 ? ((peakUsedMinutes / peakTotalMinutes) * 100).toFixed(1) : 0
 
   const emceeCount = new Set(dayBookings.filter(b => b.emceeId).map(b => b.emceeId)).size
   const bandCount = new Set(dayBookings.filter(b => b.bandId).map(b => b.bandId)).size

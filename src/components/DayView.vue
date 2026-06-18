@@ -126,7 +126,8 @@ import {
   getHallBookings,
   getHallTypeLabel,
   detectHallConflicts,
-  isHallFullAtPeak
+  isHallFullAtPeak,
+  timeToMinutes
 } from '../utils/scheduleUtils.js'
 import { halls, TIME_SLOT_START, TIME_SLOT_END, CLEANING_DURATION } from '../data/mockData.js'
 
@@ -182,6 +183,15 @@ function getHallBookingsList(hallId) {
       b.contactName.toLowerCase().includes(kw)
     )
   }
+  if (props.filterOptions.timeRangeArray && props.filterOptions.timeRangeArray.length === 2) {
+    const [rangeStart, rangeEnd] = props.filterOptions.timeRangeArray
+    const rangeStartMin = timeToMinutes(rangeStart)
+    const rangeEndMin = timeToMinutes(rangeEnd)
+    bookings = bookings.filter(b => {
+      const bookingStart = timeToMinutes(b.startTime)
+      return bookingStart >= rangeStartMin && bookingStart < rangeEndMin
+    })
+  }
 
   return bookings
 }
@@ -196,23 +206,26 @@ function getCleaningPeriods(hallId) {
   const cleanings = []
 
   for (let i = 0; i < bookings.length - 1; i++) {
-    const currentEnd = bookings[i].endTime
-    const nextStart = bookings[i + 1].startTime
-    cleanings.push({
-      id: `${hallId}-cleaning-${i}`,
-      startTime: currentEnd,
-      endTime: nextStart
-    })
+    const currentEnd = timeToMinutes(bookings[i].endTime)
+    const nextStart = timeToMinutes(bookings[i + 1].startTime)
+    const gapMinutes = nextStart - currentEnd
+
+    if (gapMinutes > 0) {
+      const actualCleaningMinutes = Math.min(CLEANING_DURATION, gapMinutes)
+      cleanings.push({
+        id: `${hallId}-cleaning-${i}`,
+        startTimeMinutes: currentEnd,
+        durationMinutes: actualCleaningMinutes
+      })
+    }
   }
 
   return cleanings
 }
 
 function getCleaningStyle(cleaning) {
-  const start = cleaning.startTime.split(':').map(Number)
-  const end = cleaning.endTime.split(':').map(Number)
-  const startMinutes = start[0] * 60 + start[1]
-  const endMinutes = end[0] * 60 + end[1]
+  const startMinutes = cleaning.startTimeMinutes
+  const endMinutes = cleaning.startTimeMinutes + cleaning.durationMinutes
   const totalMinutes = (TIME_SLOT_END - TIME_SLOT_START) * 60
   const startOffset = startMinutes - TIME_SLOT_START * 60
 

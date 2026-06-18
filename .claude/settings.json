@@ -7,7 +7,9 @@
       "Bash(mkdir -p \"C:/Users/Administrator/.claude/skills/real-bug-investigation\")",
       "Edit(~/.claude/skills/real-bug-investigation/**)",
       "Skill(real-bug-investigation)",
-      "Skill(real-bug-investigation:*)"
+      "Skill(real-bug-investigation:*)",
+      "PowerShell(git commit -m '.2187342742565564:4f5c0883812992846e308bdda797eb84_6a3403bf4bfd2152955a64f9.6a3403dd4bfd2152955a6501.6a3403dc28ed80f3eeb407fb:Trae CN.T\\(2026/6/18 22:42:37\\)')",
+      "Bash(npx vite *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Administrator\\.claude\\skills"

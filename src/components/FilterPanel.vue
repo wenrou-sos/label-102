@@ -55,6 +55,7 @@
             v-model:value="filters.keyword"
             placeholder="逝者姓名/家属姓名"
             @search="handleFilterChange"
+            @change="handleFilterChange"
             allow-clear
           />
         </div>
@@ -68,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { reactive } from 'vue'
 import { halls } from '../data/mockData.js'
 
 const props = defineProps({
@@ -87,7 +88,7 @@ const filters = reactive({
   keyword: ''
 })
 
-const timeRanges = {
+const timeRangesMap = {
   morning: ['07:00', '12:00'],
   afternoon: ['12:00', '18:00'],
   peak: ['09:00', '11:00']
@@ -102,9 +103,14 @@ function handleTimeRangeChange(value) {
 }
 
 function emitChange() {
+  let timeRangeArray = null
+  if (filters.timeRange && filters.timeRange !== 'all' && timeRangesMap[filters.timeRange]) {
+    timeRangeArray = timeRangesMap[filters.timeRange]
+  }
   const result = {
     ...filters,
-    hallIds: getFilteredHallIds()
+    hallIds: getFilteredHallIds(),
+    timeRangeArray
   }
   emit('filter-change', result)
 }
@@ -125,10 +131,6 @@ function resetFilters() {
   filters.keyword = ''
   emitChange()
 }
-
-watch(() => filters.timeRange, (newVal) => {
-  // 时间范围变化时也触发筛选
-})
 </script>
 
 <style scoped>

@@ -80,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import dayjs from 'dayjs'
 import { HomeOutlined, ClockCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import DayView from './components/DayView.vue'
@@ -109,6 +109,7 @@ const dailyStats = computed(() => getDailyStatistics(dateStr.value))
 const overtimeBookings = computed(() => detectOverTimeBookings(dateStr.value))
 
 let timeTimer = null
+let overtimeCheckTimer = null
 
 function updateTime() {
   currentTime.value = dayjs().format('YYYY年MM月DD日 HH:mm:ss')
@@ -126,11 +127,31 @@ function onSiderCollapse(collapsed) {
   siderCollapsed.value = collapsed
 }
 
+let lastAlertedCount = 0
+
+watch(overtimeBookings, (newList) => {
+  const criticalItems = newList.filter(item => !item.warning)
+  if (criticalItems.length > 0 && criticalItems.length !== lastAlertedCount) {
+    lastAlertedCount = criticalItems.length
+    showOvertimeModal.value = true
+  }
+}, { deep: true, immediate: false })
+
 onMounted(() => {
   updateTime()
   timeTimer = setInterval(updateTime, 1000)
 
+  overtimeCheckTimer = setInterval(() => {
+    const current = overtimeBookings.value
+    const criticalItems = current.filter(item => !item.warning)
+    if (criticalItems.length > 0 && criticalItems.length !== lastAlertedCount) {
+      lastAlertedCount = criticalItems.length
+      showOvertimeModal.value = true
+    }
+  }, 30000)
+
   if (overtimeBookings.value.length > 0) {
+    lastAlertedCount = overtimeBookings.value.filter(i => !i.warning).length
     setTimeout(() => {
       showOvertimeModal.value = true
     }, 1000)
@@ -140,6 +161,9 @@ onMounted(() => {
 onUnmounted(() => {
   if (timeTimer) {
     clearInterval(timeTimer)
+  }
+  if (overtimeCheckTimer) {
+    clearInterval(overtimeCheckTimer)
   }
 })
 </script>
