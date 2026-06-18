@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Administrator/.codex/skills/real-bug-investigation/**)",
+      "Bash(ls -la \"C:/Users/Administrator/.codex/skills/\")",
+      "Read(//c/Users/Administrator/.codex/skills/**)",
+      "Bash(mkdir -p \"C:/Users/Administrator/.claude/skills/real-bug-investigation\")",
+      "Edit(~/.claude/skills/real-bug-investigation/**)",
+      "Skill(real-bug-investigation)",
+      "Skill(real-bug-investigation:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Administrator\\.claude\\skills"
+    ]
+  }
+}
