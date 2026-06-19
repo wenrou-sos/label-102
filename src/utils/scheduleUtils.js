@@ -7,6 +7,8 @@ import {
   PEAK_END_HOUR,
   HALL_TYPE_LABELS,
   SERVICE_TYPE_LABELS,
+  HALL_PRICE_PER_HOUR,
+  SERVICE_PRICES,
   halls,
   emcees,
   bands,
@@ -911,4 +913,84 @@ export function applyAssignments(assignments) {
     results.push({ ...item, success })
   }
   return results
+}
+
+export function calculateBookingCost(booking) {
+  const items = []
+  let total = 0
+
+  const hall = getHallInfo(booking.hallId)
+  if (hall) {
+    const pricePerHour = HALL_PRICE_PER_HOUR[hall.type] || 0
+    const hours = booking.duration / 60
+    const hallCost = Math.round(pricePerHour * hours * 100) / 100
+    items.push({
+      type: 'hall',
+      name: `${hall.name}（${HALL_TYPE_LABELS[hall.type]}）`,
+      price: pricePerHour,
+      unit: `${booking.duration}分钟`,
+      amount: hallCost,
+      description: `${pricePerHour}元/小时 × ${hours}小时`
+    })
+    total += hallCost
+  }
+
+  if (booking.services && booking.services.length > 0) {
+    for (const service of booking.services) {
+      const price = SERVICE_PRICES[service] || 0
+      items.push({
+        type: 'service',
+        name: SERVICE_TYPE_LABELS[service] || service,
+        price,
+        unit: '次',
+        amount: price,
+        description: ''
+      })
+      total += price
+    }
+  }
+
+  return {
+    items,
+    total: Math.round(total * 100) / 100,
+    hallType: hall ? hall.type : null,
+    hallName: hall ? hall.name : ''
+  }
+}
+
+export function formatCurrency(amount) {
+  return `¥${amount.toFixed(2)}`
+}
+
+export function getDailyRevenue(date) {
+  const dayBookings = getBookings().filter(b => b.date === date && b.status !== 'cancelled')
+  let total = 0
+  const breakdown = {
+    hall: 0,
+    emcee: 0,
+    band: 0,
+    flowers: 0,
+    video: 0
+  }
+
+  for (const booking of dayBookings) {
+    const cost = calculateBookingCost(booking)
+    total += cost.total
+    cost.items.forEach(item => {
+      if (item.type === 'hall') {
+        breakdown.hall += item.amount
+      } else if (item.type === 'service') {
+        if (item.name.includes('司仪')) breakdown.emcee += item.amount
+        if (item.name.includes('乐队')) breakdown.band += item.amount
+        if (item.name.includes('鲜花')) breakdown.flowers += item.amount
+        if (item.name.includes('视频') || item.name.includes('电子屏')) breakdown.video += item.amount
+      }
+    })
+  }
+
+  return {
+    total: Math.round(total * 100) / 100,
+    breakdown,
+    bookingCount: dayBookings.length
+  }
 }

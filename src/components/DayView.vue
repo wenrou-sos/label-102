@@ -106,6 +106,7 @@
                 :container-height="scheduleHeight"
                 :has-conflict="hasBookingConflict(booking.id, hall.id)"
                 @click="handleBookingClick"
+                @view-settlement="handleViewSettlement"
               />
             </div>
 
@@ -136,6 +137,12 @@
       :date="currentDateStr"
       @save="handleSaveBooking"
       @delete="handleDeleteBooking"
+      @view-settlement="handleViewSettlementFromEdit"
+    />
+
+    <SettlementModal
+      v-model:visible="showSettlementModal"
+      :booking="settlementBooking"
     />
   </div>
 </template>
@@ -147,6 +154,7 @@ import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import BookingBlock from './BookingBlock.vue'
 import BookingEditModal from './BookingEditModal.vue'
+import SettlementModal from './SettlementModal.vue'
 import {
   getTimeSlots,
   getHallBookings,
@@ -180,6 +188,8 @@ const slotHeight = computed(() => scheduleHeight.value / timeSlots.value.length)
 
 const showEditModal = ref(false)
 const editingBooking = ref(null)
+const showSettlementModal = ref(false)
+const settlementBooking = ref(null)
 
 const timeSlots = computed(() => getTimeSlots())
 
@@ -302,6 +312,17 @@ function handleDeleteBooking(bookingId) {
     message.error('取消失败，请重试')
     console.error(e)
   }
+}
+
+function handleViewSettlement(booking) {
+  settlementBooking.value = booking
+  showSettlementModal.value = true
+}
+
+function handleViewSettlementFromEdit(booking) {
+  showEditModal.value = false
+  settlementBooking.value = booking
+  showSettlementModal.value = true
 }
 
 onMounted(() => {

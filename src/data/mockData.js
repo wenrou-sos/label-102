@@ -417,6 +417,20 @@ export const bands = [
   { id: 7, name: '第七乐队', members: 5, leader: '孙队长', status: 'rest' }
 ]
 
+export const HALL_PRICE_PER_HOUR = {
+  [HALL_TYPES.SMALL]: 300,
+  [HALL_TYPES.MEDIUM]: 500,
+  [HALL_TYPES.LARGE]: 800,
+  [HALL_TYPES.LUXURY]: 1500
+}
+
+export const SERVICE_PRICES = {
+  [SERVICE_TYPES.EMCEE]: 200,
+  [SERVICE_TYPES.BAND]: 500,
+  [SERVICE_TYPES.FLOWERS]: 300,
+  [SERVICE_TYPES.VIDEO]: 150
+}
+
 export const TIME_SLOT_START = 7
 export const TIME_SLOT_END = 18
 export const CLEANING_DURATION = 30

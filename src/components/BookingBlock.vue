@@ -38,6 +38,12 @@
         <p v-if="emceeInfo"><span class="label">司仪：</span>{{ emceeInfo.name }} ({{ emceeInfo.level }})</p>
         <p v-if="bandInfo"><span class="label">乐队：</span>{{ bandInfo.name }} ({{ bandInfo.members }}人)</p>
         <p v-if="booking.remark"><span class="label">备注：</span>{{ booking.remark }}</p>
+        <p class="tooltip-fee"><span class="label">预计费用：</span><strong>{{ formattedTotal }}</strong></p>
+      </div>
+      <div class="tooltip-actions">
+        <a-button size="small" type="primary" @click.stop="handleViewSettlement">
+          查看结算单
+        </a-button>
       </div>
     </div>
   </div>
@@ -45,7 +51,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { getHallInfo, getEmceeInfo, getBandInfo, getServiceTypeLabels, getHallTypeLabel, isPeakHour } from '../utils/scheduleUtils.js'
+import { getHallInfo, getEmceeInfo, getBandInfo, getServiceTypeLabels, getHallTypeLabel, isPeakHour, calculateBookingCost, formatCurrency } from '../utils/scheduleUtils.js'
 
 const props = defineProps({
   booking: {
@@ -62,13 +68,21 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['click'])
+const emit = defineEmits(['click', 'view-settlement'])
 const showTooltip = ref(false)
 
 function handleClick(e) {
   e.stopPropagation()
   emit('click', props.booking)
 }
+
+function handleViewSettlement(e) {
+  e.stopPropagation()
+  emit('view-settlement', props.booking)
+}
+
+const costInfo = computed(() => calculateBookingCost(props.booking))
+const formattedTotal = computed(() => formatCurrency(costInfo.value.total))
 
 const hallInfo = computed(() => getHallInfo(props.booking.hallId))
 const emceeInfo = computed(() => props.booking.emceeId ? getEmceeInfo(props.booking.emceeId) : null)
@@ -251,5 +265,24 @@ const blockStyle = computed(() => {
 
 .tooltip-body .label {
   color: rgba(0, 0, 0, 0.5);
+}
+
+.tooltip-fee {
+  margin-top: 8px !important;
+  padding-top: 8px;
+  border-top: 1px dashed #f0f0f0;
+  font-size: 14px !important;
+}
+
+.tooltip-fee strong {
+  color: #f5222d;
+  font-size: 16px;
+}
+
+.tooltip-actions {
+  margin-top: 12px;
+  text-align: right;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
 }
 </style>

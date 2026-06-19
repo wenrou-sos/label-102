@@ -142,20 +142,37 @@
         />
       </a-form-item>
 
+      <div v-if="costInfo.items.length > 0" class="cost-preview">
+        <div class="cost-title">
+          <span>费用明细</span>
+          <span class="cost-total">合计：{{ formatCurrency(costInfo.total) }}</span>
+        </div>
+        <div class="cost-list">
+          <div v-for="(item, index) in costInfo.items" :key="index" class="cost-item">
+            <span class="cost-item-name">{{ item.name }}</span>
+            <span class="cost-item-desc" v-if="item.description">{{ item.description }}</span>
+            <span class="cost-item-amount">{{ formatCurrency(item.amount) }}</span>
+          </div>
+        </div>
+      </div>
+
       <div v-if="conflictWarning" class="conflict-warning">
         <a-alert type="warning" show-icon :message="conflictWarning" />
       </div>
     </a-form>
 
-    <template #footer v-if="isEdit">
-      <a-button danger @click="handleDelete" :loading="deleting">
+    <template #footer>
+      <a-button v-if="isEdit" danger @click="handleDelete" :loading="deleting">
         <DeleteOutlined />
         取消预约
+      </a-button>
+      <a-button v-if="isEdit" type="dashed" @click="handleViewSettlement">
+        查看结算单
       </a-button>
       <div>
         <a-button @click="handleCancel">取消</a-button>
         <a-button type="primary" :loading="saving" @click="handleSubmit">
-          保存修改
+          {{ isEdit ? '保存修改' : '创建预约' }}
         </a-button>
       </div>
     </template>
@@ -180,7 +197,9 @@ import {
   timeToMinutes,
   minutesToTime,
   checkBookingConflict,
-  checkStaffAvailability
+  checkStaffAvailability,
+  calculateBookingCost,
+  formatCurrency
 } from '../utils/scheduleUtils.js'
 
 const props = defineProps({
@@ -198,7 +217,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:visible', 'save', 'delete'])
+const emit = defineEmits(['update:visible', 'save', 'delete', 'view-settlement'])
 
 const formRef = ref(null)
 const saving = ref(false)
@@ -207,6 +226,17 @@ const conflictWarning = ref('')
 
 const isEdit = computed(() => !!props.booking)
 const modalTitle = computed(() => isEdit.value ? '编辑预约' : '新建预约')
+
+const costInfo = computed(() => {
+  if (!formData.hallId || !formData.duration) {
+    return { items: [], total: 0 }
+  }
+  return calculateBookingCost({
+    hallId: formData.hallId,
+    duration: formData.duration,
+    services: formData.services
+  })
+})
 
 const availableHalls = computed(() => halls)
 const hallTypeLabels = HALL_TYPE_LABELS
@@ -432,6 +462,10 @@ async function handleDelete() {
   }
 }
 
+function handleViewSettlement() {
+  emit('view-settlement', props.booking)
+}
+
 function handleCancel() {
   emit('update:visible', false)
   resetForm()
@@ -450,6 +484,61 @@ function resetForm() {
 <style scoped>
 .conflict-warning {
   margin-top: 16px;
+}
+
+.cost-preview {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 8px;
+}
+
+.cost-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 15px;
+  color: rgba(0, 0, 0, 0.85);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #b7eb8f;
+}
+
+.cost-total {
+  color: #52c41a;
+  font-size: 18px;
+}
+
+.cost-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cost-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.cost-item-name {
+  color: rgba(0, 0, 0, 0.75);
+  flex: 1;
+}
+
+.cost-item-desc {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  margin: 0 12px;
+}
+
+.cost-item-amount {
+  color: rgba(0, 0, 0, 0.85);
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 :deep(.ant-modal-footer) {
