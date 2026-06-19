@@ -9,6 +9,7 @@ import {
   SERVICE_TYPE_LABELS,
   halls,
   bookings,
+  allBookings,
   emcees,
   bands
 } from '../data/mockData.js'
@@ -342,4 +343,176 @@ export function detectOverTimeBookings(date) {
   })
 
   return overTimeList
+}
+
+const TOTAL_MINUTES_PER_DAY = (TIME_SLOT_END - TIME_SLOT_START) * 60
+
+function calculateUsageRate(bookingsList, hallCount, days = 1) {
+  let totalUsedMinutes = 0
+  bookingsList.forEach(booking => {
+    totalUsedMinutes += (timeToMinutes(booking.endTime) - timeToMinutes(booking.startTime))
+  })
+  const totalAvailableMinutes = TOTAL_MINUTES_PER_DAY * hallCount * days
+  return totalAvailableMinutes > 0
+    ? Number(((totalUsedMinutes / totalAvailableMinutes) * 100).toFixed(1))
+    : 0
+}
+
+export function getWeeklyStatistics(endDate) {
+  const end = dayjs(endDate)
+  const dates = []
+  for (let i = 6; i >= 0; i--) {
+    dates.push(end.subtract(i, 'day').format('YYYY-MM-DD'))
+  }
+
+  const weekBookings = allBookings.filter(b => dates.includes(b.date))
+  const dailyData = dates.map(date => {
+    const dayBookings = weekBookings.filter(b => b.date === date)
+    const dateObj = dayjs(date)
+    return {
+      date,
+      label: `${dateObj.month() + 1}/${dateObj.date()}`,
+      weekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][dateObj.day()],
+      bookingCount: dayBookings.length,
+      usageRate: calculateUsageRate(dayBookings, halls.length)
+    }
+  })
+
+  const hallUsage = halls.map(hall => {
+    const hallBookings = weekBookings.filter(b => b.hallId === hall.id)
+    const typeCount = {}
+    hallBookings.forEach(b => {
+      b.services.forEach(s => {
+        typeCount[s] = (typeCount[s] || 0) + 1
+      })
+    })
+    return {
+      ...hall,
+      bookingCount: hallBookings.length,
+      usageRate: calculateUsageRate(hallBookings, 1, 7),
+      typeCount
+    }
+  }).sort((a, b) => b.usageRate - a.usageRate)
+
+  const totalBookings = weekBookings.length
+  const avgDailyBookings = (totalBookings / 7).toFixed(1)
+  const overallUsageRate = calculateUsageRate(weekBookings, halls.length, 7)
+
+  const hallTypeUsage = {}
+  Object.values(HALL_TYPE_LABELS).forEach(() => {})
+  halls.forEach(hall => {
+    if (!hallTypeUsage[hall.type]) {
+      hallTypeUsage[hall.type] = { label: HALL_TYPE_LABELS[hall.type], count: 0, usedMinutes: 0 }
+    }
+    const hallBookings = weekBookings.filter(b => b.hallId === hall.id)
+    hallTypeUsage[hall.type].count += hallBookings.length
+    hallBookings.forEach(b => {
+      hallTypeUsage[hall.type].usedMinutes += (timeToMinutes(b.endTime) - timeToMinutes(b.startTime))
+    })
+  })
+  Object.keys(hallTypeUsage).forEach(type => {
+    const hallsOfType = halls.filter(h => h.type === type).length
+    hallTypeUsage[type].usageRate = Number(
+      ((hallTypeUsage[type].usedMinutes / (TOTAL_MINUTES_PER_DAY * hallsOfType * 7)) * 100).toFixed(1)
+    )
+  })
+
+  return {
+    dailyData,
+    hallUsage,
+    totalBookings,
+    avgDailyBookings,
+    overallUsageRate,
+    hallTypeUsage,
+    dateRange: `${dates[0]} 至 ${dates[6]}`
+  }
+}
+
+export function getMonthlyStatistics(endDate) {
+  const end = dayjs(endDate)
+  const startOfMonth = end.startOf('month')
+  const daysInMonth = end.daysInMonth()
+  const dates = []
+  for (let i = 0; i < daysInMonth; i++) {
+    dates.push(startOfMonth.add(i, 'day').format('YYYY-MM-DD'))
+  }
+
+  const monthBookings = allBookings.filter(b => dates.includes(b.date))
+
+  const weekData = []
+  let currentWeekStart = 0
+  while (currentWeekStart < daysInMonth) {
+    const weekDates = dates.slice(currentWeekStart, Math.min(currentWeekStart + 7, daysInMonth))
+    const weekBookings = monthBookings.filter(b => weekDates.includes(b.date))
+    const weekStart = dayjs(weekDates[0])
+    const weekEnd = dayjs(weekDates[weekDates.length - 1])
+    weekData.push({
+      label: `${weekStart.month() + 1}/${weekStart.date()}-${weekEnd.month() + 1}/${weekEnd.date()}`,
+      bookingCount: weekBookings.length,
+      usageRate: calculateUsageRate(weekBookings, halls.length, weekDates.length),
+      dayCount: weekDates.length
+    })
+    currentWeekStart += 7
+  }
+
+  const hallUsage = halls.map(hall => {
+    const hallBookings = monthBookings.filter(b => b.hallId === hall.id)
+    return {
+      ...hall,
+      bookingCount: hallBookings.length,
+      usageRate: calculateUsageRate(hallBookings, 1, daysInMonth)
+    }
+  }).sort((a, b) => b.usageRate - a.usageRate)
+
+  const totalBookings = monthBookings.length
+  const avgDailyBookings = (totalBookings / daysInMonth).toFixed(1)
+  const overallUsageRate = calculateUsageRate(monthBookings, halls.length, daysInMonth)
+
+  const hallTypeUsage = {}
+  halls.forEach(hall => {
+    if (!hallTypeUsage[hall.type]) {
+      hallTypeUsage[hall.type] = { label: HALL_TYPE_LABELS[hall.type], count: 0, usedMinutes: 0 }
+    }
+    const hallBookings = monthBookings.filter(b => b.hallId === hall.id)
+    hallTypeUsage[hall.type].count += hallBookings.length
+    hallBookings.forEach(b => {
+      hallTypeUsage[hall.type].usedMinutes += (timeToMinutes(b.endTime) - timeToMinutes(b.startTime))
+    })
+  })
+  Object.keys(hallTypeUsage).forEach(type => {
+    const hallsOfType = halls.filter(h => h.type === type).length
+    hallTypeUsage[type].usageRate = Number(
+      ((hallTypeUsage[type].usedMinutes / (TOTAL_MINUTES_PER_DAY * hallsOfType * daysInMonth)) * 100).toFixed(1)
+    )
+  })
+
+  return {
+    weekData,
+    hallUsage,
+    totalBookings,
+    avgDailyBookings,
+    overallUsageRate,
+    hallTypeUsage,
+    monthLabel: `${end.year()}年${end.month() + 1}月`,
+    daysInMonth
+  }
+}
+
+export function getHallUsageTrend(hallId, endDate, days = 7) {
+  const end = dayjs(endDate)
+  const dates = []
+  for (let i = days - 1; i >= 0; i--) {
+    dates.push(end.subtract(i, 'day').format('YYYY-MM-DD'))
+  }
+
+  return dates.map(date => {
+    const dayBookings = allBookings.filter(b => b.date === date && b.hallId === hallId)
+    const dateObj = dayjs(date)
+    return {
+      date,
+      label: `${dateObj.month() + 1}/${dateObj.date()}`,
+      bookingCount: dayBookings.length,
+      usageRate: calculateUsageRate(dayBookings, 1)
+    }
+  })
 }

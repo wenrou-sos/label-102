@@ -61,7 +61,7 @@
                 </a-col>
                 <a-col :xs="24" :lg="10">
                   <a-card class="stats-card">
-                    <StatisticsPanel :stats="dailyStats" />
+                    <StatisticsPanel :stats="dailyStats" :current-date="currentDate" />
                   </a-card>
                 </a-col>
               </a-row>

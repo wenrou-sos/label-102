@@ -392,3 +392,114 @@ export const TIME_SLOT_END = 18
 export const CLEANING_DURATION = 30
 export const PEAK_START_HOUR = 9
 export const PEAK_END_HOUR = 11
+
+const deceasedNames = [
+  '张大爷', '李奶奶', '王老先生', '赵阿姨', '孙老先生',
+  '周奶奶', '吴老先生', '郑阿姨', '冯老先生', '陈奶奶',
+  '褚大爷', '卫老先生', '蒋奶奶', '沈老先生', '韩阿姨',
+  '杨大爷', '朱老先生', '秦奶奶', '尤老先生', '许阿姨',
+  '何老先生', '吕奶奶', '施大爷', '张阿姨', '孔老先生',
+  '曹奶奶', '严老先生', '华阿姨', '金大爷', '魏奶奶'
+]
+
+const contactNames = [
+  '张建国', '李明', '王芳', '赵伟', '孙强',
+  '周明', '吴刚', '郑华', '冯磊', '陈静',
+  '褚军', '卫强', '蒋明', '沈伟', '韩芳',
+  '杨军', '朱明', '秦静', '尤刚', '许华',
+  '何勇', '吕强', '施亮', '张峰', '孔伟',
+  '曹明', '严华', '华军', '金磊', '魏强'
+]
+
+const timeSlotsList = [
+  { start: '08:00', end: '08:30', duration: 30 },
+  { start: '08:30', end: '09:30', duration: 60 },
+  { start: '09:00', end: '10:30', duration: 90 },
+  { start: '09:30', end: '10:30', duration: 60 },
+  { start: '10:00', end: '11:30', duration: 90 },
+  { start: '10:30', end: '12:00', duration: 90 },
+  { start: '11:00', end: '12:30', duration: 90 },
+  { start: '13:00', end: '14:00', duration: 60 },
+  { start: '13:30', end: '14:30', duration: 60 },
+  { start: '13:30', end: '15:00', duration: 90 },
+  { start: '14:00', end: '15:00', duration: 60 },
+  { start: '14:00', end: '15:30', duration: 90 },
+  { start: '14:30', end: '15:30', duration: 60 },
+  { start: '14:30', end: '16:00', duration: 90 },
+  { start: '15:00', end: '16:30', duration: 90 },
+  { start: '09:00', end: '11:00', duration: 120 },
+  { start: '10:00', end: '12:00', duration: 120 }
+]
+
+function generateRandomServices() {
+  const base = [SERVICE_TYPES.EMCEE]
+  if (Math.random() > 0.3) base.push(SERVICE_TYPES.FLOWERS)
+  if (Math.random() > 0.5) base.push(SERVICE_TYPES.BAND)
+  if (Math.random() > 0.5) base.push(SERVICE_TYPES.VIDEO)
+  return base
+}
+
+export function generateHistoricalBookings() {
+  const historical = []
+  let bookingId = 100
+
+  for (let dayOffset = 30; dayOffset >= 0; dayOffset--) {
+    const date = dayjs().subtract(dayOffset, 'day').format('YYYY-MM-DD')
+    const dayOfWeek = dayjs().subtract(dayOffset, 'day').day()
+    const bookingsOnDay = dayOfWeek === 0 || dayOfWeek === 6
+      ? Math.floor(Math.random() * 8) + 14
+      : Math.floor(Math.random() * 6) + 10
+
+    const usedHallSlots = {}
+    halls.forEach(h => { usedHallSlots[h.id] = [] })
+
+    for (let i = 0; i < bookingsOnDay; i++) {
+      let attempts = 0
+      while (attempts < 20) {
+        const hallId = halls[Math.floor(Math.random() * halls.length)].id
+        const slot = timeSlotsList[Math.floor(Math.random() * timeSlotsList.length)]
+        const startMin = parseInt(slot.start.split(':')[0]) * 60 + parseInt(slot.start.split(':')[1])
+        const endMin = parseInt(slot.end.split(':')[0]) * 60 + parseInt(slot.end.split(':')[1])
+
+        let conflict = false
+        for (const used of usedHallSlots[hallId]) {
+          if (startMin < used.end + CLEANING_DURATION && endMin + CLEANING_DURATION > used.start) {
+            conflict = true
+            break
+          }
+        }
+
+        if (!conflict) {
+          usedHallSlots[hallId].push({ start: startMin, end: endMin })
+          const nameIdx = Math.floor(Math.random() * deceasedNames.length)
+          const services = generateRandomServices()
+          const hasBand = services.includes(SERVICE_TYPES.BAND)
+          const hasEmcee = services.includes(SERVICE_TYPES.EMCEE)
+
+          historical.push({
+            id: bookingId++,
+            hallId,
+            date,
+            startTime: slot.start,
+            endTime: slot.end,
+            duration: slot.duration,
+            deceasedName: deceasedNames[nameIdx],
+            contactName: contactNames[nameIdx],
+            contactPhone: `13800${String(138000 + bookingId).slice(-6)}`,
+            services,
+            emceeId: hasEmcee ? emcees[Math.floor(Math.random() * 9)].id : null,
+            bandId: hasBand ? bands[Math.floor(Math.random() * 6)].id : null,
+            status: dayOffset === 0 ? (i < 12 ? 'confirmed' : (i === 12 ? 'in-progress' : 'confirmed')) : 'completed',
+            remark: ''
+          })
+          break
+        }
+        attempts++
+      }
+    }
+  }
+
+  return historical
+}
+
+export const allBookings = generateHistoricalBookings()
