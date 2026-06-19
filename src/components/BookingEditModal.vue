@@ -291,9 +291,7 @@ function applyTemplate(tpl) {
   selectedTemplate.value = tpl.id
   formData.services = [...tpl.services]
   formData.duration = tpl.duration
-  if (tpl.remark && !formData.remark) {
-    formData.remark = tpl.remark
-  }
+  formData.remark = tpl.remark || ''
 
   if (!tpl.services.includes(SERVICE_TYPES.EMCEE)) {
     formData.emceeId = null
@@ -304,6 +302,22 @@ function applyTemplate(tpl) {
 
   checkConflict()
 }
+
+function isFormMatchTemplate(tpl) {
+  if (formData.duration !== tpl.duration) return false
+  if (formData.services.length !== tpl.services.length) return false
+  const sortedFormServices = [...formData.services].sort()
+  const sortedTplServices = [...tpl.services].sort()
+  return sortedFormServices.every((s, i) => s === sortedTplServices[i])
+}
+
+watch([() => formData.services, () => formData.duration], () => {
+  if (!selectedTemplate.value) return
+  const tpl = templates.find(t => t.id === selectedTemplate.value)
+  if (!tpl || !isFormMatchTemplate(tpl)) {
+    selectedTemplate.value = null
+  }
+}, { deep: true })
 
 function checkConflict() {
   if (!formData.hallId || !formData.startTime || !formData.duration) {
@@ -381,12 +395,7 @@ async function handleSubmit() {
     const bookingData = {
       ...formData,
       endTime,
-      date: props.date,
-      services: formData.services.filter(s => {
-        if (s === SERVICE_TYPES.EMCEE) return !!formData.emceeId
-        if (s === SERVICE_TYPES.BAND) return !!formData.bandId
-        return true
-      })
+      date: props.date
     }
 
     if (!bookingData.services.includes(SERVICE_TYPES.EMCEE)) {
