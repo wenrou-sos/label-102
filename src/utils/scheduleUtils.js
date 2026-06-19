@@ -8,11 +8,18 @@ import {
   HALL_TYPE_LABELS,
   SERVICE_TYPE_LABELS,
   halls,
-  bookings,
-  allBookings,
   emcees,
-  bands
+  bands,
+  bookingStore
 } from '../data/mockData.js'
+
+function getBookings() {
+  return bookingStore.getBookings()
+}
+
+function getAllBookings() {
+  return bookingStore.getAllBookings()
+}
 
 export function timeToMinutes(time) {
   const [hours, minutes] = time.split(':').map(Number)
@@ -45,7 +52,7 @@ export function getTimeSlots() {
 }
 
 export function getHallBookings(hallId, date) {
-  return bookings.filter(b => b.hallId === hallId && b.date === date)
+  return getBookings().filter(b => b.hallId === hallId && b.date === date)
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
@@ -111,7 +118,7 @@ export function detectStaffConflicts(date) {
   const emceeBookings = {}
   const bandBookings = {}
 
-  bookings.filter(b => b.date === date).forEach(booking => {
+  getBookings().filter(b => b.date === date).forEach(booking => {
     if (booking.emceeId) {
       if (!emceeBookings[booking.emceeId]) {
         emceeBookings[booking.emceeId] = []
@@ -187,7 +194,7 @@ export function getPeakHallsStatus(date) {
 }
 
 export function getDailyStatistics(date) {
-  const dayBookings = bookings.filter(b => b.date === date)
+  const dayBookings = getBookings().filter(b => b.date === date)
   const totalBookings = dayBookings.length
 
   const hallTypeCount = {}
@@ -264,19 +271,19 @@ export function getHallTypeLabel(type) {
 }
 
 export function getEmceeSchedule(emceeId, date) {
-  return bookings
+  return getBookings()
     .filter(b => b.emceeId === emceeId && b.date === date)
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
 export function getBandSchedule(bandId, date) {
-  return bookings
+  return getBookings()
     .filter(b => b.bandId === bandId && b.date === date)
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
 export function filterBookings({ hallType, serviceType, timeRange, keyword }, date) {
-  let filtered = bookings.filter(b => b.date === date)
+  let filtered = getBookings().filter(b => b.date === date)
 
   if (hallType && hallType !== 'all') {
     const hallIds = halls.filter(h => h.type === hallType).map(h => h.id)
@@ -307,7 +314,7 @@ export function filterBookings({ hallType, serviceType, timeRange, keyword }, da
 }
 
 export function detectOverTimeBookings(date) {
-  const dayBookings = bookings.filter(b => b.date === date)
+  const dayBookings = getBookings().filter(b => b.date === date)
   const overTimeList = []
 
   halls.forEach(hall => {
@@ -366,7 +373,7 @@ export function getHallUsageTrend(hallId, endDate, days = 7) {
   }
 
   return dates.map(date => {
-    const dayBookings = allBookings.filter(b => b.date === date && b.hallId === hallId)
+    const dayBookings = getAllBookings().filter(b => b.date === date && b.hallId === hallId)
     const dateObj = dayjs(date)
     return {
       date,
@@ -375,6 +382,84 @@ export function getHallUsageTrend(hallId, endDate, days = 7) {
       usageRate: calculateUsageRate(dayBookings, 1)
     }
   })
+}
+
+export function checkBookingConflict(hallId, date, startTime, endTime, excludeId = null) {
+  const hallBookings = getHallBookings(hallId, date)
+  const s1 = timeToMinutes(startTime)
+  const e1 = timeToMinutes(endTime)
+
+  for (const booking of hallBookings) {
+    if (excludeId && booking.id === excludeId) continue
+    if (booking.status === 'cancelled') continue
+
+    const s2 = timeToMinutes(booking.startTime)
+    const e2 = timeToMinutes(booking.endTime)
+
+    if (s1 < e2 && s2 < e1) {
+      return `时段冲突：与 ${booking.deceasedName} 的 ${booking.startTime}-${booking.endTime} 预约重叠`
+    }
+
+    const gap = s2 - e1
+    if (gap > 0 && gap < CLEANING_DURATION) {
+      return `保洁时间不足：与 ${booking.deceasedName} 的预约之间仅间隔 ${gap} 分钟（需 ${CLEANING_DURATION} 分钟）`
+    }
+  }
+
+  if (e1 > TIME_SLOT_END * 60 || s1 < TIME_SLOT_START * 60) {
+    return `超出营业时间：仅支持 ${String(TIME_SLOT_START).padStart(2, '0')}:00 - ${String(TIME_SLOT_END).padStart(2, '0')}:00`
+  }
+
+  return null
+}
+
+export function checkStaffAvailability(bookingData, date, excludeId = null) {
+  const dayBookings = getBookings().filter(b => b.date === date && b.status !== 'cancelled')
+
+  const s1 = timeToMinutes(bookingData.startTime)
+  const endMin = s1 + bookingData.duration
+
+  if (bookingData.emceeId) {
+    const emceeBookings = dayBookings.filter(
+      b => b.emceeId === bookingData.emceeId && (!excludeId || b.id !== excludeId)
+    )
+    for (const b of emceeBookings) {
+      const s2 = timeToMinutes(b.startTime)
+      const e2 = timeToMinutes(b.endTime)
+      if (s1 < e2 && s2 < endMin) {
+        const emcee = emcees.find(e => e.id === bookingData.emceeId)
+        return `司仪 ${emcee?.name || ''} 时段冲突：与 ${b.deceasedName} 的 ${b.startTime}-${b.endTime} 预约重叠`
+      }
+    }
+  }
+
+  if (bookingData.bandId) {
+    const bandBookings = dayBookings.filter(
+      b => b.bandId === bookingData.bandId && (!excludeId || b.id !== excludeId)
+    )
+    for (const b of bandBookings) {
+      const s2 = timeToMinutes(b.startTime)
+      const e2 = timeToMinutes(b.endTime)
+      if (s1 < e2 && s2 < endMin) {
+        const band = bands.find(b2 => b2.id === bookingData.bandId)
+        return `乐队 ${band?.name || ''} 时段冲突：与 ${b.deceasedName} 的 ${b.startTime}-${b.endTime} 预约重叠`
+      }
+    }
+  }
+
+  return null
+}
+
+export function createBooking(bookingData) {
+  return bookingStore.addBooking(bookingData)
+}
+
+export function updateBooking(id, updates) {
+  return bookingStore.updateBooking(id, updates)
+}
+
+export function deleteBooking(id) {
+  return bookingStore.deleteBooking(id)
 }
 
 function calculateHourlyUsage(bookingsList, hallCount, startHour, endHour, days = 1) {
@@ -487,7 +572,7 @@ export function getWeeklyStatistics(endDate) {
   const validDates = dates.filter(d => dayjs(d).isBefore(dayjs(todayStr).add(1, 'day')))
   const dayCount = validDates.length
 
-  const weekBookings = allBookings.filter(b => validDates.includes(b.date))
+  const weekBookings = getAllBookings().filter(b => validDates.includes(b.date))
   const dailyData = validDates.map(date => {
     const dayBookings = weekBookings.filter(b => b.date === date)
     const dateObj = dayjs(date)
@@ -572,7 +657,7 @@ export function getMonthlyStatistics(endDate) {
   const validDates = allDates.filter(d => dayjs(d).isBefore(dayjs(todayStr).add(1, 'day')))
   const validDayCount = validDates.length
 
-  const monthBookings = allBookings.filter(b => validDates.includes(b.date))
+  const monthBookings = getAllBookings().filter(b => validDates.includes(b.date))
 
   const weekData = []
   let currentWeekStart = 0

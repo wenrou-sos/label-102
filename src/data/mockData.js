@@ -534,3 +534,60 @@ export function generateHistoricalBookings() {
 }
 
 export const allBookings = generateHistoricalBookings()
+
+import { ref } from 'vue'
+
+let nextId = Math.max(...bookings.map(b => b.id), ...allBookings.map(b => b.id)) + 1
+
+const reactiveBookings = ref([...bookings])
+const reactiveAllBookings = ref([...allBookings])
+
+export const bookingStore = {
+  getBookings: () => reactiveBookings.value,
+  getAllBookings: () => reactiveAllBookings.value,
+
+  addBooking: (bookingData) => {
+    const newBooking = {
+      ...bookingData,
+      id: nextId++
+    }
+    reactiveBookings.value.push(newBooking)
+    reactiveAllBookings.value.push(newBooking)
+    return newBooking
+  },
+
+  updateBooking: (id, updates) => {
+    const idx = reactiveBookings.value.findIndex(b => b.id === id)
+    if (idx !== -1) {
+      reactiveBookings.value[idx] = { ...reactiveBookings.value[idx], ...updates }
+    }
+    const allIdx = reactiveAllBookings.value.findIndex(b => b.id === id)
+    if (allIdx !== -1) {
+      reactiveAllBookings.value[allIdx] = { ...reactiveAllBookings.value[allIdx], ...updates }
+    }
+    return idx !== -1
+  },
+
+  deleteBooking: (id) => {
+    const idx = reactiveBookings.value.findIndex(b => b.id === id)
+    if (idx !== -1) {
+      reactiveBookings.value.splice(idx, 1)
+    }
+    const allIdx = reactiveAllBookings.value.findIndex(b => b.id === id)
+    if (allIdx !== -1) {
+      reactiveAllBookings.value.splice(allIdx, 1)
+    }
+    return idx !== -1
+  },
+
+  getNextId: () => nextId
+}
+
+export function getBookingsRef() {
+  return reactiveBookings
+}
+
+export function getAllBookingsRef() {
+  return reactiveAllBookings
+}
+

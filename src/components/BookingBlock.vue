@@ -8,6 +8,7 @@
     :style="blockStyle"
     @mouseenter="showTooltip = true"
     @mouseleave="showTooltip = false"
+    @click="handleClick"
   >
     <div class="booking-block__header">
       <span class="booking-block__name">{{ booking.deceasedName }}</span>
@@ -61,7 +62,13 @@ const props = defineProps({
   }
 })
 
+const emit = defineEmits(['click'])
 const showTooltip = ref(false)
+
+function handleClick(e) {
+  e.stopPropagation()
+  emit('click', props.booking)
+}
 
 const hallInfo = computed(() => getHallInfo(props.booking.hallId))
 const emceeInfo = computed(() => props.booking.emceeId ? getEmceeInfo(props.booking.emceeId) : null)

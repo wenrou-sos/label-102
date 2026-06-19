@@ -4,6 +4,12 @@
       <div class="day-view__date-picker">
         <a-date-picker v-model:value="currentDate" @change="handleDateChange" style="width: 200px" />
       </div>
+      <div class="day-view__actions">
+        <a-button type="primary" @click="openCreateModal">
+          <PlusOutlined />
+          新建预约
+        </a-button>
+      </div>
       <div class="day-view__legend">
         <span class="legend-item">
           <span class="legend-color legend-confirmed"></span>
@@ -91,6 +97,7 @@
                 :booking="booking"
                 :container-height="scheduleHeight"
                 :has-conflict="hasBookingConflict(booking.id, hall.id)"
+                @click="handleBookingClick"
               />
             </div>
 
@@ -114,20 +121,34 @@
         :message="`高峰期提示：${peakFullHalls.map(h => h.name).join('、')} 已全满，建议错峰安排`"
       />
     </div>
+
+    <BookingEditModal
+      v-model:visible="showEditModal"
+      :booking="editingBooking"
+      :date="currentDateStr"
+      @save="handleSaveBooking"
+      @delete="handleDeleteBooking"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import dayjs from 'dayjs'
+import { PlusOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import BookingBlock from './BookingBlock.vue'
+import BookingEditModal from './BookingEditModal.vue'
 import {
   getTimeSlots,
   getHallBookings,
   getHallTypeLabel,
   detectHallConflicts,
   isHallFullAtPeak,
-  timeToMinutes
+  timeToMinutes,
+  createBooking,
+  updateBooking,
+  deleteBooking
 } from '../utils/scheduleUtils.js'
 import { halls, TIME_SLOT_START, TIME_SLOT_END, CLEANING_DURATION } from '../data/mockData.js'
 
@@ -148,6 +169,9 @@ const currentDate = ref(dayjs())
 const scheduleContainer = ref(null)
 const scheduleHeight = ref(660)
 const slotHeight = computed(() => scheduleHeight.value / timeSlots.value.length)
+
+const showEditModal = ref(false)
+const editingBooking = ref(null)
 
 const timeSlots = computed(() => getTimeSlots())
 
@@ -235,6 +259,41 @@ function getCleaningStyle(cleaning) {
   }
 }
 
+function openCreateModal() {
+  editingBooking.value = null
+  showEditModal.value = true
+}
+
+function handleBookingClick(booking) {
+  editingBooking.value = booking
+  showEditModal.value = true
+}
+
+function handleSaveBooking({ bookingData, isEdit, originalId }) {
+  try {
+    if (isEdit) {
+      updateBooking(originalId, bookingData)
+      message.success('预约更新成功')
+    } else {
+      createBooking(bookingData)
+      message.success('预约创建成功')
+    }
+  } catch (e) {
+    message.error('操作失败，请重试')
+    console.error(e)
+  }
+}
+
+function handleDeleteBooking(bookingId) {
+  try {
+    deleteBooking(bookingId)
+    message.success('预约已取消')
+  } catch (e) {
+    message.error('取消失败，请重试')
+    console.error(e)
+  }
+}
+
 onMounted(() => {
   nextTick(() => {
     if (scheduleContainer.value) {
@@ -268,6 +327,11 @@ watch(currentDate, () => {
   background: #fafafa;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.day-view__actions {
+  display: flex;
+  gap: 8px;
 }
 
 .day-view__legend {
