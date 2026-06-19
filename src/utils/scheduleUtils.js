@@ -52,7 +52,7 @@ export function getTimeSlots() {
 }
 
 export function getHallBookings(hallId, date) {
-  return getBookings().filter(b => b.hallId === hallId && b.date === date)
+  return getBookings().filter(b => b.hallId === hallId && b.date === date && b.status !== 'cancelled')
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
@@ -118,7 +118,7 @@ export function detectStaffConflicts(date) {
   const emceeBookings = {}
   const bandBookings = {}
 
-  getBookings().filter(b => b.date === date).forEach(booking => {
+  getBookings().filter(b => b.date === date && b.status !== 'cancelled').forEach(booking => {
     if (booking.emceeId) {
       if (!emceeBookings[booking.emceeId]) {
         emceeBookings[booking.emceeId] = []
@@ -194,7 +194,7 @@ export function getPeakHallsStatus(date) {
 }
 
 export function getDailyStatistics(date) {
-  const dayBookings = getBookings().filter(b => b.date === date)
+  const dayBookings = getBookings().filter(b => b.date === date && b.status !== 'cancelled')
   const totalBookings = dayBookings.length
 
   const hallTypeCount = {}
@@ -272,18 +272,18 @@ export function getHallTypeLabel(type) {
 
 export function getEmceeSchedule(emceeId, date) {
   return getBookings()
-    .filter(b => b.emceeId === emceeId && b.date === date)
+    .filter(b => b.emceeId === emceeId && b.date === date && b.status !== 'cancelled')
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
 export function getBandSchedule(bandId, date) {
   return getBookings()
-    .filter(b => b.bandId === bandId && b.date === date)
+    .filter(b => b.bandId === bandId && b.date === date && b.status !== 'cancelled')
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
 export function filterBookings({ hallType, serviceType, timeRange, keyword }, date) {
-  let filtered = getBookings().filter(b => b.date === date)
+  let filtered = getBookings().filter(b => b.date === date && b.status !== 'cancelled')
 
   if (hallType && hallType !== 'all') {
     const hallIds = halls.filter(h => h.type === hallType).map(h => h.id)
@@ -373,7 +373,7 @@ export function getHallUsageTrend(hallId, endDate, days = 7) {
   }
 
   return dates.map(date => {
-    const dayBookings = getAllBookings().filter(b => b.date === date && b.hallId === hallId)
+    const dayBookings = getAllBookings().filter(b => b.date === date && b.hallId === hallId && b.status !== 'cancelled')
     const dateObj = dayjs(date)
     return {
       date,
@@ -657,7 +657,7 @@ export function getMonthlyStatistics(endDate) {
   const validDates = allDates.filter(d => dayjs(d).isBefore(dayjs(todayStr).add(1, 'day')))
   const validDayCount = validDates.length
 
-  const monthBookings = getAllBookings().filter(b => validDates.includes(b.date))
+  const monthBookings = getAllBookings().filter(b => validDates.includes(b.date) && b.status !== 'cancelled')
 
   const weekData = []
   let currentWeekStart = 0

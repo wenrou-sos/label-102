@@ -140,9 +140,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, h } from 'vue'
 import dayjs from 'dayjs'
-import { DeleteOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { Modal, message } from 'ant-design-vue'
 import {
   halls,
   emcees,
@@ -239,7 +240,7 @@ watch(() => props.visible, (val) => {
   }
 })
 
-watch([() => formData.hallId, () => formData.startTime, () => formData.duration], () => {
+watch([() => formData.hallId, () => formData.startTime, () => formData.duration, () => formData.emceeId, () => formData.bandId], () => {
   checkConflict()
 }, { deep: true })
 
@@ -291,12 +292,46 @@ function checkConflict() {
 async function handleSubmit() {
   try {
     await formRef.value.validate()
-    saving.value = true
 
     const endMin = timeToMinutes(formData.startTime) + formData.duration
+    const endTime = minutesToTime(endMin)
+
+    const conflict = checkBookingConflict(
+      formData.hallId,
+      props.date,
+      formData.startTime,
+      endTime,
+      isEdit.value ? props.booking.id : null
+    )
+
+    const staffConflict = checkStaffAvailability(
+      formData,
+      props.date,
+      isEdit.value ? props.booking.id : null
+    )
+
+    const activeConflict = conflict || staffConflict
+
+    if (activeConflict) {
+      await new Promise((resolve, reject) => {
+        Modal.confirm({
+          title: '存在冲突风险',
+          icon: () => h(ExclamationCircleOutlined, { style: { color: '#faad14' } }),
+          content: activeConflict,
+          okText: '强制保存',
+          okType: 'danger',
+          cancelText: '返回修改',
+          onOk: () => resolve(true),
+          onCancel: () => reject(new Error('用户取消'))
+        })
+      })
+    }
+
+    saving.value = true
+
     const bookingData = {
       ...formData,
-      endTime: minutesToTime(endMin),
+      endTime,
       date: props.date,
       services: formData.services.filter(s => {
         if (s === SERVICE_TYPES.EMCEE) return !!formData.emceeId
@@ -320,7 +355,9 @@ async function handleSubmit() {
 
     handleCancel()
   } catch (e) {
-    console.log('表单校验失败:', e)
+    if (e.message !== '用户取消') {
+      console.log('表单校验失败:', e)
+    }
   } finally {
     saving.value = false
   }

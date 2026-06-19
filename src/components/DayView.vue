@@ -20,6 +20,14 @@
           进行中
         </span>
         <span class="legend-item">
+          <span class="legend-color legend-completed"></span>
+          已完成
+        </span>
+        <span class="legend-item">
+          <span class="legend-color legend-cancelled"></span>
+          已取消
+        </span>
+        <span class="legend-item">
           <span class="legend-color legend-conflict"></span>
           冲突
         </span>
@@ -150,7 +158,7 @@ import {
   updateBooking,
   deleteBooking
 } from '../utils/scheduleUtils.js'
-import { halls, TIME_SLOT_START, TIME_SLOT_END, CLEANING_DURATION } from '../data/mockData.js'
+import { halls, TIME_SLOT_START, TIME_SLOT_END, CLEANING_DURATION, bookingStore } from '../data/mockData.js'
 
 const props = defineProps({
   filteredHallIds: {
@@ -195,7 +203,9 @@ function handleDateChange(date) {
 }
 
 function getHallBookingsList(hallId) {
-  let bookings = getHallBookings(hallId, currentDateStr.value)
+  let bookings = bookingStore.getBookings().filter(
+    b => b.hallId === hallId && b.date === currentDateStr.value
+  ).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 
   if (props.filterOptions.serviceType && props.filterOptions.serviceType !== 'all') {
     bookings = bookings.filter(b => b.services.includes(props.filterOptions.serviceType))
@@ -362,6 +372,28 @@ watch(currentDate, () => {
 .legend-in-progress {
   background: linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%);
   border: 1px solid #b7eb8f;
+}
+
+.legend-completed {
+  background: linear-gradient(135deg, #fafafa 0%, #d9d9d9 100%);
+  border: 1px solid #bfbfbf;
+}
+
+.legend-cancelled {
+  background: linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%);
+  border: 1px solid #ffa39e;
+  position: relative;
+}
+
+.legend-cancelled::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.3);
+  transform: rotate(-10deg);
 }
 
 .legend-conflict {

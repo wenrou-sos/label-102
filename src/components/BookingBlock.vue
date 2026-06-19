@@ -129,6 +129,30 @@ const blockStyle = computed(() => {
   opacity: 0.7;
 }
 
+.booking-block.status-cancelled {
+  background: linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%);
+  border-color: #ffa39e;
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.booking-block.status-cancelled .booking-block__name {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.booking-block.status-cancelled::after {
+  content: '已取消';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #ff4d4f;
+  color: white;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-decoration: none;
+}
+
 .booking-block.has-conflict {
   background: linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%) !important;
   border-color: #ff4d4f !important;
