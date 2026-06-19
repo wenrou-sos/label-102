@@ -431,24 +431,51 @@ const timeSlotsList = [
   { start: '10:00', end: '12:00', duration: 120 }
 ]
 
-function generateRandomServices() {
+function seededRandom(seed) {
+  let s = seed
+  return function() {
+    s = (s * 9301 + 49297) % 233280
+    return s / 233280
+  }
+}
+
+function generateRandomServices(rand) {
   const base = [SERVICE_TYPES.EMCEE]
-  if (Math.random() > 0.3) base.push(SERVICE_TYPES.FLOWERS)
-  if (Math.random() > 0.5) base.push(SERVICE_TYPES.BAND)
-  if (Math.random() > 0.5) base.push(SERVICE_TYPES.VIDEO)
+  if (rand() > 0.3) base.push(SERVICE_TYPES.FLOWERS)
+  if (rand() > 0.5) base.push(SERVICE_TYPES.BAND)
+  if (rand() > 0.5) base.push(SERVICE_TYPES.VIDEO)
   return base
 }
 
 export function generateHistoricalBookings() {
+  const todayStr = dayjs().format('YYYY-MM-DD')
+  const cacheKey = `funeral_bookings_${todayStr}`
+
+  try {
+    const cached = localStorage.getItem(cacheKey)
+    if (cached) {
+      const parsed = JSON.parse(cached)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+  } catch (e) {}
+
   const historical = []
   let bookingId = 100
+  const baseSeed = dayjs(todayStr).valueOf() % 100000
 
   for (let dayOffset = 30; dayOffset >= 0; dayOffset--) {
-    const date = dayjs().subtract(dayOffset, 'day').format('YYYY-MM-DD')
-    const dayOfWeek = dayjs().subtract(dayOffset, 'day').day()
+    const dateObj = dayjs(todayStr).subtract(dayOffset, 'day')
+    const date = dateObj.format('YYYY-MM-DD')
+    const dayOfWeek = dateObj.day()
+
+    const daySeed = baseSeed + dayOffset * 1000
+    const rand = seededRandom(daySeed)
+
     const bookingsOnDay = dayOfWeek === 0 || dayOfWeek === 6
-      ? Math.floor(Math.random() * 8) + 14
-      : Math.floor(Math.random() * 6) + 10
+      ? Math.floor(rand() * 8) + 14
+      : Math.floor(rand() * 6) + 10
 
     const usedHallSlots = {}
     halls.forEach(h => { usedHallSlots[h.id] = [] })
@@ -456,8 +483,8 @@ export function generateHistoricalBookings() {
     for (let i = 0; i < bookingsOnDay; i++) {
       let attempts = 0
       while (attempts < 20) {
-        const hallId = halls[Math.floor(Math.random() * halls.length)].id
-        const slot = timeSlotsList[Math.floor(Math.random() * timeSlotsList.length)]
+        const hallId = halls[Math.floor(rand() * halls.length)].id
+        const slot = timeSlotsList[Math.floor(rand() * timeSlotsList.length)]
         const startMin = parseInt(slot.start.split(':')[0]) * 60 + parseInt(slot.start.split(':')[1])
         const endMin = parseInt(slot.end.split(':')[0]) * 60 + parseInt(slot.end.split(':')[1])
 
@@ -471,8 +498,8 @@ export function generateHistoricalBookings() {
 
         if (!conflict) {
           usedHallSlots[hallId].push({ start: startMin, end: endMin })
-          const nameIdx = Math.floor(Math.random() * deceasedNames.length)
-          const services = generateRandomServices()
+          const nameIdx = Math.floor(rand() * deceasedNames.length)
+          const services = generateRandomServices(rand)
           const hasBand = services.includes(SERVICE_TYPES.BAND)
           const hasEmcee = services.includes(SERVICE_TYPES.EMCEE)
 
@@ -487,8 +514,8 @@ export function generateHistoricalBookings() {
             contactName: contactNames[nameIdx],
             contactPhone: `13800${String(138000 + bookingId).slice(-6)}`,
             services,
-            emceeId: hasEmcee ? emcees[Math.floor(Math.random() * 9)].id : null,
-            bandId: hasBand ? bands[Math.floor(Math.random() * 6)].id : null,
+            emceeId: hasEmcee ? emcees[Math.floor(rand() * 9)].id : null,
+            bandId: hasBand ? bands[Math.floor(rand() * 6)].id : null,
             status: dayOffset === 0 ? (i < 12 ? 'confirmed' : (i === 12 ? 'in-progress' : 'confirmed')) : 'completed',
             remark: ''
           })
@@ -498,6 +525,10 @@ export function generateHistoricalBookings() {
       }
     }
   }
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(historical))
+  } catch (e) {}
 
   return historical
 }
