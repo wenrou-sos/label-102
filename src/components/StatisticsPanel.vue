@@ -461,7 +461,7 @@ function getPeakHourChartData(trendData) {
 }
 
 function getStaffChartData(staffData, defaultColor) {
-  return staffData.slice(0, 6).map(item => ({
+  return staffData.map(item => ({
     label: item.label,
     subLabel: item.subLabel,
     value: item.value,

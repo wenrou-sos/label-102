@@ -377,8 +377,8 @@ export function getHallUsageTrend(hallId, endDate, days = 7) {
   })
 }
 
-function calculateHourlyUsage(bookingsList, hallCount, startHour, endHour) {
-  const totalMinutes = (endHour - startHour) * 60 * hallCount
+function calculateHourlyUsage(bookingsList, hallCount, startHour, endHour, days = 1) {
+  const totalMinutes = (endHour - startHour) * 60 * hallCount * days
   let usedMinutes = 0
 
   bookingsList.forEach(booking => {
@@ -396,13 +396,16 @@ function calculateHourlyUsage(bookingsList, hallCount, startHour, endHour) {
   return totalMinutes > 0 ? Number(((usedMinutes / totalMinutes) * 100).toFixed(1)) : 0
 }
 
-export function getPeakHourTrend(bookingsList, hallCount) {
+export function getPeakHourTrend(bookingsList, hallCount, days = 1) {
   const hours = []
   for (let h = TIME_SLOT_START; h < TIME_SLOT_END; h++) {
-    const usageRate = calculateHourlyUsage(bookingsList, hallCount, h, h + 1)
+    const usageRate = calculateHourlyUsage(bookingsList, hallCount, h, h + 1, days)
+    const hourStart = h * 60
+    const hourEnd = (h + 1) * 60
     const bookingCount = bookingsList.filter(b => {
-      const startHour = parseInt(b.startTime.split(':')[0])
-      return startHour === h
+      const bStart = timeToMinutes(b.startTime)
+      const bEnd = timeToMinutes(b.endTime)
+      return bStart < hourEnd && bEnd > hourStart
     }).length
     hours.push({
       hour: h,
@@ -453,10 +456,10 @@ export function getStaffLoadStats(bookingsList, staffList, staffType, days = 1) 
     .sort((a, b) => b.loadRate - a.loadRate)
 }
 
-function getPeakHourUsage(weeklyBookings, hallCount) {
+function getPeakHourUsage(weeklyBookings, hallCount, days = 1) {
   const peakStart = PEAK_START_HOUR * 60
   const peakEnd = PEAK_END_HOUR * 60
-  const totalPeakMinutes = (peakEnd - peakStart) * hallCount
+  const totalPeakMinutes = (peakEnd - peakStart) * hallCount * days
 
   let peakUsedMinutes = 0
   weeklyBookings.forEach(booking => {
@@ -535,10 +538,10 @@ export function getWeeklyStatistics(endDate) {
     ) : 0
   })
 
-  const peakHourTrend = getPeakHourTrend(weekBookings, halls.length)
+  const peakHourTrend = getPeakHourTrend(weekBookings, halls.length, dayCount)
   const emceeLoad = getStaffLoadStats(weekBookings, emcees, 'emcee', dayCount)
   const bandLoad = getStaffLoadStats(weekBookings, bands, 'band', dayCount)
-  const peakHourUsage = getPeakHourUsage(weekBookings, halls.length)
+  const peakHourUsage = getPeakHourUsage(weekBookings, halls.length, dayCount)
 
   return {
     dailyData,
@@ -618,10 +621,10 @@ export function getMonthlyStatistics(endDate) {
     ) : 0
   })
 
-  const peakHourTrend = getPeakHourTrend(monthBookings, halls.length)
+  const peakHourTrend = getPeakHourTrend(monthBookings, halls.length, validDayCount)
   const emceeLoad = getStaffLoadStats(monthBookings, emcees, 'emcee', validDayCount)
   const bandLoad = getStaffLoadStats(monthBookings, bands, 'band', validDayCount)
-  const peakHourUsage = getPeakHourUsage(monthBookings, halls.length)
+  const peakHourUsage = getPeakHourUsage(monthBookings, halls.length, validDayCount)
 
   return {
     weekData,
