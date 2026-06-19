@@ -203,7 +203,7 @@
       <div class="stats-section">
         <TrendChart
           :data="weekStats.dailyData"
-          title="近7天使用率趋势"
+          title="本周使用率趋势"
           :sub-title="weekStats.dateRange"
           line-color="#1890ff"
         />

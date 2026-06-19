@@ -8,11 +8,16 @@
       <div class="y-axis">
         <span v-for="tick in yTicks" :key="tick" class="y-tick">{{ tick }}%</span>
       </div>
-      <div class="chart-area">
+      <div class="chart-area" @mouseleave="onChartLeave">
         <div class="grid-lines">
           <div v-for="tick in yTicks" :key="tick" class="grid-line"></div>
         </div>
-        <svg class="chart-svg" :viewBox="`0 0 ${chartWidth} ${chartHeight}`" preserveAspectRatio="none">
+        <svg
+          class="chart-svg"
+          :viewBox="`0 0 ${chartWidth} ${chartHeight}`"
+          preserveAspectRatio="xMidYMid meet"
+          @mousemove="onChartMove"
+        >
           <defs>
             <linearGradient :id="gradId" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" :style="{ stopColor: lineColor, stopOpacity: 0.3 }" />
@@ -24,7 +29,7 @@
             :d="linePath"
             fill="none"
             :stroke="lineColor"
-            stroke-width="2.5"
+            stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
           />
@@ -32,26 +37,49 @@
             <circle
               :cx="point.x"
               :cy="point.y"
-              r="point.highlight ? 6 : 4"
-              :fill="point.highlight ? lineColor : 'white'"
+              :r="hoveredIndex === idx ? 7 : (point.highlight ? 6 : 5)"
+              :fill="hoveredIndex === idx ? lineColor : (point.highlight ? lineColor : 'white')"
               :stroke="lineColor"
-              stroke-width="2"
+              stroke-width="2.5"
+              style="cursor: pointer; transition: r 0.15s ease"
             />
           </g>
+          <line
+            v-if="hoveredIndex !== null && points[hoveredIndex]"
+            :x1="points[hoveredIndex].x"
+            :y1="paddingTop"
+            :x2="points[hoveredIndex].x"
+            :y2="chartHeight - paddingBottom"
+            :stroke="lineColor"
+            stroke-width="1"
+            stroke-dasharray="3 3"
+            stroke-opacity="0.5"
+          />
         </svg>
         <div class="x-labels">
-          <span v-for="(item, idx) in data" :key="idx" class="x-label">
+          <span
+            v-for="(item, idx) in data"
+            :key="idx"
+            class="x-label"
+            :class="{ 'x-label-active': hoveredIndex === idx }"
+          >
             {{ item.label }}
             <span v-if="item.weekday" class="x-weekday">{{ item.weekday }}</span>
           </span>
         </div>
       </div>
     </div>
-    <div class="chart-tooltip" v-if="hoveredIndex !== null && data[hoveredIndex]">
-      <div class="tooltip-item"><strong>{{ data[hoveredIndex].label }}</strong></div>
-      <div class="tooltip-item">场次：{{ data[hoveredIndex].bookingCount }}</div>
-      <div class="tooltip-item">使用率：{{ data[hoveredIndex].usageRate }}%</div>
-    </div>
+    <transition name="fade">
+      <div
+        class="chart-tooltip"
+        v-if="hoveredIndex !== null && data[hoveredIndex]"
+        :style="tooltipStyle"
+      >
+        <div class="tooltip-item"><strong>{{ data[hoveredIndex].label }}{{ data[hoveredIndex].weekday ? ' ' + data[hoveredIndex].weekday : '' }}</strong></div>
+        <div class="tooltip-item">场次：{{ data[hoveredIndex].bookingCount }}</div>
+        <div class="tooltip-item">使用率：{{ data[hoveredIndex].usageRate }}%</div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -79,9 +107,12 @@ const props = defineProps({
 
 const chartWidth = 500
 const chartHeight = 160
-const paddingTop = 10
-const paddingBottom = 0
+const paddingTop = 20
+const paddingBottom = 10
+const paddingLeft = 10
+const paddingRight = 10
 const hoveredIndex = ref(null)
+const tooltipStyle = ref({})
 
 const gradId = computed(() => `grad-${Math.random().toString(36).slice(2, 8)}`)
 
@@ -95,14 +126,15 @@ const maxValue = computed(() => {
 
 const points = computed(() => {
   if (!props.data.length) return []
-  const usableHeight = chartHeight - paddingTop - paddingBottom
-  const stepX = props.data.length > 1 ? chartWidth / (props.data.length - 1) : chartWidth / 2
+  const innerWidth = chartWidth - paddingLeft - paddingRight
+  const innerHeight = chartHeight - paddingTop - paddingBottom
+  const stepX = props.data.length > 1 ? innerWidth / (props.data.length - 1) : innerWidth / 2
   const maxVal = maxValue.value
 
   return props.data.map((d, i) => {
-    const x = i * stepX
+    const x = paddingLeft + i * stepX
     const usage = Math.min(d.usageRate, maxVal)
-    const y = paddingTop + usableHeight - (usage / maxVal) * usableHeight
+    const y = paddingTop + innerHeight - (usage / maxVal) * innerHeight
     return { x, y, highlight: i === props.data.length - 1 }
   })
 })
@@ -117,8 +149,42 @@ const areaPath = computed(() => {
   const line = points.value.map((p, i) => (i === 0 ? 'M' : 'L') + `${p.x},${p.y}`).join(' ')
   const lastX = points.value[points.value.length - 1].x
   const firstX = points.value[0].x
-  return `${line} L${lastX},${chartHeight} L${firstX},${chartHeight} Z`
+  const bottomY = chartHeight - paddingBottom
+  return `${line} L${lastX},${bottomY} L${firstX},${bottomY} Z`
 })
+
+function onChartMove(e) {
+  if (!props.data.length) return
+  const svg = e.currentTarget
+  const rect = svg.getBoundingClientRect()
+  const x = (e.clientX - rect.left) / rect.width * chartWidth
+  const innerWidth = chartWidth - paddingLeft - paddingRight
+  const stepX = props.data.length > 1 ? innerWidth / (props.data.length - 1) : innerWidth / 2
+
+  let closestIdx = 0
+  let closestDist = Infinity
+  points.value.forEach((p, i) => {
+    const dist = Math.abs(p.x - x)
+    if (dist < closestDist) {
+      closestDist = dist
+      closestIdx = i
+    }
+  })
+
+  if (closestIdx !== hoveredIndex.value) {
+    hoveredIndex.value = closestIdx
+    const svgWidthRatio = rect.width / chartWidth
+    const leftPx = points.value[closestIdx].x * svgWidthRatio
+    tooltipStyle.value = {
+      left: `${Math.min(Math.max(leftPx - 60, 0), rect.width - 140)}px`,
+      top: '-50px'
+    }
+  }
+}
+
+function onChartLeave() {
+  hoveredIndex.value = null
+}
 </script>
 
 <style scoped>
@@ -156,7 +222,7 @@ const areaPath = computed(() => {
   justify-content: space-between;
   width: 36px;
   flex-shrink: 0;
-  padding: 10px 0 0 0;
+  padding: 20px 0 10px 0;
   height: 160px;
 }
 
@@ -180,7 +246,8 @@ const areaPath = computed(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding-top: 10px;
+  padding: 20px 10px 10px 10px;
+  pointer-events: none;
 }
 
 .grid-line {
@@ -192,12 +259,13 @@ const areaPath = computed(() => {
   width: 100%;
   height: 160px;
   display: block;
+  touch-action: none;
 }
 
 .x-labels {
   display: flex;
   justify-content: space-between;
-  padding: 4px 0 0 0;
+  padding: 4px 10px 0 10px;
 }
 
 .x-label {
@@ -208,6 +276,12 @@ const areaPath = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: color 0.15s ease;
+}
+
+.x-label-active {
+  color: rgba(0, 0, 0, 0.85);
+  font-weight: 600;
 }
 
 .x-weekday {
@@ -217,19 +291,31 @@ const areaPath = computed(() => {
 
 .chart-tooltip {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.85);
   color: white;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  white-space: nowrap;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
 }
 
 .tooltip-item {
-  line-height: 1.4;
+  line-height: 1.5;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

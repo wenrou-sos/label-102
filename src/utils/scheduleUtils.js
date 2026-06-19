@@ -428,7 +428,7 @@ export function getWeeklyStatistics(endDate) {
     avgDailyBookings,
     overallUsageRate,
     hallTypeUsage,
-    dateRange: `${dates[0]} 至 ${dates[6]}`
+    dateRange: `${validDates[0]} 至 ${validDates[validDates.length - 1]}（本周一至今日，共${dayCount}天）`
   }
 }
 
