@@ -56,7 +56,7 @@
               <a-row :gutter="[16, 16]">
                 <a-col :xs="24" :lg="14">
                   <a-card title="人员排班管理" class="staff-card">
-                    <StaffSchedule :date="currentDate" />
+                    <StaffSchedule :date="currentDate" @schedule-updated="handleScheduleUpdated" />
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="10">
@@ -125,6 +125,12 @@ function handleFilterChange(filters) {
 
 function onSiderCollapse(collapsed) {
   siderCollapsed.value = collapsed
+}
+
+function handleScheduleUpdated() {
+  if (dayViewRef.value && typeof dayViewRef.value.forceUpdate === 'function') {
+    dayViewRef.value.forceUpdate()
+  }
 }
 
 let lastAlertedCount = 0

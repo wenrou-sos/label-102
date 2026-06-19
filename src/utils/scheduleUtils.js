@@ -726,3 +726,155 @@ export function getMonthlyStatistics(endDate) {
     peakHourUsage
   }
 }
+
+function isStaffAvailable(staffSchedule, bookingStart, bookingEnd) {
+  const s1 = typeof bookingStart === 'string' ? timeToMinutes(bookingStart) : bookingStart
+  const e1 = typeof bookingEnd === 'string' ? timeToMinutes(bookingEnd) : bookingEnd
+  for (const existing of staffSchedule) {
+    const s2 = timeToMinutes(existing.startTime)
+    const e2 = timeToMinutes(existing.endTime)
+    if (s1 < e2 && s2 < e1) {
+      return false
+    }
+  }
+  return true
+}
+
+function getStaffWorkMinutes(staffSchedule) {
+  return staffSchedule.reduce((total, booking) => {
+    return total + (timeToMinutes(booking.endTime) - timeToMinutes(booking.startTime))
+  }, 0)
+}
+
+export function autoAssignStaff(date) {
+  const dayBookings = getBookings().filter(b => b.date === date && b.status !== 'cancelled')
+  const onDutyEmcees = emcees.filter(e => e.status === 'on-duty')
+  const onDutyBands = bands.filter(b => b.status === 'on-duty')
+
+  const emceeNeededBookings = dayBookings
+    .filter(b => b.services.includes('emcee') && !b.emceeId)
+    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+
+  const bandNeededBookings = dayBookings
+    .filter(b => b.services.includes('band') && !b.bandId)
+    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+
+  const emceeSchedules = {}
+  onDutyEmcees.forEach(e => { emceeSchedules[e.id] = getEmceeSchedule(e.id, date) })
+
+  const bandSchedules = {}
+  onDutyBands.forEach(b => { bandSchedules[b.id] = getBandSchedule(b.id, date) })
+
+  const assignments = []
+  const failedAssignments = []
+
+  for (const booking of emceeNeededBookings) {
+    const bookingStart = timeToMinutes(booking.startTime)
+    const bookingEnd = timeToMinutes(booking.endTime)
+
+    const candidates = onDutyEmcees
+      .filter(emcee => isStaffAvailable(emceeSchedules[emcee.id], bookingStart, bookingEnd))
+      .sort((a, b) => {
+        const workA = getStaffWorkMinutes(emceeSchedules[a.id])
+        const workB = getStaffWorkMinutes(emceeSchedules[b.id])
+        if (workA !== workB) return workA - workB
+        const expA = a.experience || 0
+        const expB = b.experience || 0
+        return expB - expA
+      })
+
+    if (candidates.length > 0) {
+      const selected = candidates[0]
+      assignments.push({
+        bookingId: booking.id,
+        booking,
+        staffType: 'emcee',
+        staffId: selected.id,
+        staffName: selected.name,
+        staffInfo: selected
+      })
+      emceeSchedules[selected.id].push(booking)
+    } else {
+      failedAssignments.push({
+        bookingId: booking.id,
+        booking,
+        staffType: 'emcee',
+        reason: '无空闲司仪'
+      })
+    }
+  }
+
+  for (const booking of bandNeededBookings) {
+    const bookingStart = timeToMinutes(booking.startTime)
+    const bookingEnd = timeToMinutes(booking.endTime)
+
+    const candidates = onDutyBands
+      .filter(band => isStaffAvailable(bandSchedules[band.id], bookingStart, bookingEnd))
+      .sort((a, b) => {
+        const workA = getStaffWorkMinutes(bandSchedules[a.id])
+        const workB = getStaffWorkMinutes(bandSchedules[b.id])
+        if (workA !== workB) return workA - workB
+        const membersA = a.members || 0
+        const membersB = b.members || 0
+        return membersB - membersA
+      })
+
+    if (candidates.length > 0) {
+      const selected = candidates[0]
+      assignments.push({
+        bookingId: booking.id,
+        booking,
+        staffType: 'band',
+        staffId: selected.id,
+        staffName: selected.name,
+        staffInfo: selected
+      })
+      bandSchedules[selected.id].push(booking)
+    } else {
+      failedAssignments.push({
+        bookingId: booking.id,
+        booking,
+        staffType: 'band',
+        reason: '无空闲乐队'
+      })
+    }
+  }
+
+  const emceeAssigned = assignments.filter(a => a.staffType === 'emcee').length
+  const bandAssigned = assignments.filter(a => a.staffType === 'band').length
+  const emceeFailed = failedAssignments.filter(f => f.staffType === 'emcee').length
+  const bandFailed = failedAssignments.filter(f => f.staffType === 'band').length
+
+  return {
+    assignments,
+    failedAssignments,
+    summary: {
+      totalToAssign: emceeNeededBookings.length + bandNeededBookings.length,
+      emceeNeeded: emceeNeededBookings.length,
+      bandNeeded: bandNeededBookings.length,
+      emceeAssigned,
+      bandAssigned,
+      emceeFailed,
+      bandFailed,
+      totalAssigned: emceeAssigned + bandAssigned,
+      totalFailed: emceeFailed + bandFailed,
+      onDutyEmcees: onDutyEmcees.length,
+      onDutyBands: onDutyBands.length
+    }
+  }
+}
+
+export function applyAssignments(assignments) {
+  const results = []
+  for (const item of assignments) {
+    const updates = {}
+    if (item.staffType === 'emcee') {
+      updates.emceeId = item.staffId
+    } else if (item.staffType === 'band') {
+      updates.bandId = item.staffId
+    }
+    const success = updateBooking(item.bookingId, updates)
+    results.push({ ...item, success })
+  }
+  return results
+}
