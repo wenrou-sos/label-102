@@ -463,7 +463,24 @@ async function handleDelete() {
 }
 
 function handleViewSettlement() {
-  emit('view-settlement', props.booking)
+  const startMin = timeToMinutes(formData.startTime)
+  const endMin = startMin + formData.duration
+  const tempBooking = {
+    id: props.booking?.id || Date.now(),
+    date: props.date,
+    deceasedName: formData.deceasedName || '（未填写）',
+    contactName: formData.contactName || '（未填写）',
+    contactPhone: formData.contactPhone || '（未填写）',
+    hallId: formData.hallId,
+    startTime: formData.startTime,
+    endTime: minutesToTime(endMin),
+    duration: formData.duration,
+    services: formData.services,
+    emceeId: formData.emceeId,
+    bandId: formData.bandId,
+    remark: formData.remark || ''
+  }
+  emit('view-settlement', tempBooking)
 }
 
 function handleCancel() {

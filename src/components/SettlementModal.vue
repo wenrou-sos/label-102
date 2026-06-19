@@ -183,7 +183,11 @@ const amountInWords = computed(() => {
 })
 
 function handlePrint() {
+  document.body.classList.add('printing-settlement')
   window.print()
+  setTimeout(() => {
+    document.body.classList.remove('printing-settlement')
+  }, 100)
 }
 
 function handleCancel() {
@@ -314,27 +318,46 @@ function handleCancel() {
   display: none !important;
 }
 
-:deep(.ant-modal) {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
+body.printing-settlement > * {
+  display: none !important;
+}
+
+body.printing-settlement .ant-modal-mask,
+body.printing-settlement .ant-modal-wrap {
+  display: block !important;
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  background: none !important;
+  overflow: visible !important;
+}
+
+body.printing-settlement .ant-modal {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
   width: 100% !important;
   max-width: none !important;
   margin: 0 !important;
-  padding: 20px !important;
+  padding: 0 !important;
   box-shadow: none !important;
+  transform: none !important;
 }
 
-:deep(.ant-modal-content) {
+body.printing-settlement .ant-modal-content {
   box-shadow: none !important;
+  border: none !important;
+  background: white !important;
 }
 
-:deep(.ant-modal-header) {
+body.printing-settlement .ant-modal-header,
+body.printing-settlement .ant-modal-close {
   display: none !important;
 }
 
-:deep(.ant-modal-close) {
-  display: none !important;
+body.printing-settlement .ant-modal-body {
+  padding: 0 !important;
+  overflow: visible !important;
 }
 
 body {
