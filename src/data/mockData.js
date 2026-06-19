@@ -28,6 +28,36 @@ export const SERVICE_TYPE_LABELS = {
   [SERVICE_TYPES.VIDEO]: '电子屏追思视频'
 }
 
+export const CEREMONY_TEMPLATES = [
+  {
+    id: 'simple',
+    name: '简约仪式',
+    description: '仅司仪主持，简洁庄重',
+    services: [SERVICE_TYPES.EMCEE],
+    duration: 30,
+    remark: '',
+    icon: '⚪'
+  },
+  {
+    id: 'standard',
+    name: '标准追思会',
+    description: '司仪主持 + 鲜花布置',
+    services: [SERVICE_TYPES.EMCEE, SERVICE_TYPES.FLOWERS],
+    duration: 45,
+    remark: '包含基础鲜花布置（签到台、遗像台）',
+    icon: '🌸'
+  },
+  {
+    id: 'grand',
+    name: '隆重告别',
+    description: '司仪 + 乐队 + 鲜花 + 视频',
+    services: [SERVICE_TYPES.EMCEE, SERVICE_TYPES.BAND, SERVICE_TYPES.FLOWERS, SERVICE_TYPES.VIDEO],
+    duration: 60,
+    remark: '包含全套鲜花布置、乐队现场演奏、追思视频制作',
+    icon: '🎗️'
+  }
+]
+
 export const halls = [
   { id: 1, name: '泰安厅', type: HALL_TYPES.SMALL, capacity: 20, floor: '1F' },
   { id: 2, name: '永思厅', type: HALL_TYPES.SMALL, capacity: 20, floor: '1F' },

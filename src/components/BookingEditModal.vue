@@ -46,6 +46,29 @@
         </a-col>
       </a-row>
 
+      <a-form-item label="仪式流程模板">
+        <div class="template-list">
+          <div
+            v-for="tpl in templates"
+            :key="tpl.id"
+            class="template-card"
+            :class="{ selected: selectedTemplate === tpl.id }"
+            @click="applyTemplate(tpl)"
+          >
+            <div class="template-icon">{{ tpl.icon }}</div>
+            <div class="template-content">
+              <div class="template-name">{{ tpl.name }}</div>
+              <div class="template-desc">{{ tpl.description }}</div>
+              <div class="template-meta">
+                <span>{{ tpl.duration }}分钟</span>
+                <span class="template-services">{{ getTemplateServiceLabels(tpl) }}</span>
+              </div>
+            </div>
+            <div class="template-check" v-if="selectedTemplate === tpl.id">✓</div>
+          </div>
+        </div>
+      </a-form-item>
+
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="开始时间" name="startTime">
@@ -149,7 +172,9 @@ import {
   emcees,
   bands,
   HALL_TYPE_LABELS,
-  SERVICE_TYPES
+  SERVICE_TYPES,
+  SERVICE_TYPE_LABELS,
+  CEREMONY_TEMPLATES
 } from '../data/mockData.js'
 import {
   timeToMinutes,
@@ -187,6 +212,8 @@ const availableHalls = computed(() => halls)
 const hallTypeLabels = HALL_TYPE_LABELS
 const availableEmcees = computed(() => emcees.filter(e => e.status === 'on-duty'))
 const availableBands = computed(() => bands.filter(b => b.status === 'on-duty'))
+const templates = CEREMONY_TEMPLATES
+const selectedTemplate = ref(null)
 
 const defaultFormData = () => ({
   deceasedName: '',
@@ -254,6 +281,28 @@ function handleDurationChange() {
   const startMin = timeToMinutes(formData.startTime)
   const endMin = startMin + formData.duration
   formData.endTime = minutesToTime(endMin)
+}
+
+function getTemplateServiceLabels(tpl) {
+  return tpl.services.map(s => SERVICE_TYPE_LABELS[s]).join('、')
+}
+
+function applyTemplate(tpl) {
+  selectedTemplate.value = tpl.id
+  formData.services = [...tpl.services]
+  formData.duration = tpl.duration
+  if (tpl.remark && !formData.remark) {
+    formData.remark = tpl.remark
+  }
+
+  if (!tpl.services.includes(SERVICE_TYPES.EMCEE)) {
+    formData.emceeId = null
+  }
+  if (!tpl.services.includes(SERVICE_TYPES.BAND)) {
+    formData.bandId = null
+  }
+
+  checkConflict()
 }
 
 function checkConflict() {
@@ -382,6 +431,7 @@ function handleCancel() {
 function resetForm() {
   Object.assign(formData, defaultFormData())
   conflictWarning.value = ''
+  selectedTemplate.value = null
   if (formRef.value) {
     formRef.value.clearValidate()
   }
@@ -396,5 +446,85 @@ function resetForm() {
 :deep(.ant-modal-footer) {
   display: flex;
   justify-content: space-between;
+}
+
+.template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.template-card {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border: 2px solid #f0f0f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fafafa;
+}
+
+.template-card:hover {
+  border-color: #1890ff;
+  background: #e6f7ff;
+}
+
+.template-card.selected {
+  border-color: #1890ff;
+  background: #e6f7ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
+}
+
+.template-icon {
+  font-size: 28px;
+  margin-right: 12px;
+  width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.template-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.template-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+  margin-bottom: 2px;
+}
+
+.template-desc {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  margin-bottom: 4px;
+}
+
+.template-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.template-services {
+  color: #1890ff;
+}
+
+.template-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #1890ff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  margin-left: 12px;
+  flex-shrink: 0;
 }
 </style>
