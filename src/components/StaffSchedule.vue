@@ -145,11 +145,11 @@
       <div v-if="scheduleResult" class="schedule-result">
         <div class="result-summary">
           <a-descriptions bordered size="small" :column="2">
-            <a-descriptions-item label="待分配司仪">
-              {{ scheduleResult.summary.emceeNeeded }} 场
+            <a-descriptions-item label="冲突预约">
+              <span style="color: #ff4d4f; font-weight: 500">{{ scheduleResult.summary.conflictCount }} 场</span>
             </a-descriptions-item>
-            <a-descriptions-item label="待分配乐队">
-              {{ scheduleResult.summary.bandNeeded }} 场
+            <a-descriptions-item label="重新分配成功">
+              <span style="color: #1890ff">{{ scheduleResult.summary.totalReassign }} 场</span>
             </a-descriptions-item>
             <a-descriptions-item label="成功分配司仪">
               <span style="color: #52c41a">{{ scheduleResult.summary.emceeAssigned }} 场</span>
@@ -176,10 +176,14 @@
             :data-source="scheduleResult.assignments"
             :pagination="false"
             size="small"
-            row-key="bookingId"
+            :row-key="record => record.bookingId + '_' + record.staffType"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'staff'">
+              <template v-if="column.key === 'type'">
+                <span>{{ record.staffType === 'emcee' ? '司仪' : '乐队' }}</span>
+                <a-tag v-if="record.isReassign" color="orange" size="small" style="margin-left: 4px">重排</a-tag>
+              </template>
+              <template v-else-if="column.key === 'staff'">
                 <a-select
                   v-model:value="selectedStaffMap[record.bookingId + '_' + record.staffType]"
                   style="width: 100%"
@@ -205,7 +209,7 @@
           </h4>
           <a-alert
             v-for="fail in scheduleResult.failedAssignments"
-            :key="fail.bookingId"
+            :key="fail.bookingId + '_' + fail.staffType"
             type="warning"
             show-icon
             class="fail-item"
@@ -234,7 +238,8 @@ import {
   getHallInfo,
   detectStaffConflicts,
   autoAssignStaff,
-  applyAssignments
+  applyAssignments,
+  timeToMinutes
 } from '../utils/scheduleUtils.js'
 import { emcees, bands } from '../data/mockData.js'
 import dayjs from 'dayjs'
@@ -279,8 +284,7 @@ const assignmentColumns = [
   {
     title: '类型',
     key: 'type',
-    width: 60,
-    customRender: ({ record }) => record.staffType === 'emcee' ? '司仪' : '乐队'
+    width: 100
   },
   {
     title: '分配人员（可调整）',
@@ -329,12 +333,40 @@ function getConflictStaffName(conflict) {
   }
 }
 
-function getAvailableStaff(record) {
-  if (record.staffType === 'emcee') {
-    return emcees.filter(e => e.status === 'on-duty')
+function getConflictBookingIds() {
+  const conflicts = detectStaffConflicts(dateStr.value)
+  const ids = new Set()
+  conflicts.forEach(c => {
+    ids.add(c.booking1.id)
+    ids.add(c.booking2.id)
+  })
+  return ids
+}
+
+function isStaffTimeAvailable(staffId, staffType, booking) {
+  const bookingStart = timeToMinutes(booking.startTime)
+  const bookingEnd = timeToMinutes(booking.endTime)
+  let schedule
+  if (staffType === 'emcee') {
+    schedule = getEmceeSchedule(staffId, dateStr.value)
   } else {
-    return bands.filter(b => b.status === 'on-duty')
+    schedule = getBandSchedule(staffId, dateStr.value)
   }
+  const conflictIds = getConflictBookingIds()
+  const otherBookings = schedule.filter(b => b.id !== booking.id && !conflictIds.has(b.id))
+  for (const existing of otherBookings) {
+    const s2 = timeToMinutes(existing.startTime)
+    const e2 = timeToMinutes(existing.endTime)
+    if (bookingStart < e2 && s2 < bookingEnd) {
+      return false
+    }
+  }
+  return true
+}
+
+function getAvailableStaff(record) {
+  const allStaff = record.staffType === 'emcee' ? emcees : bands
+  return allStaff.filter(s => s.status === 'on-duty' && isStaffTimeAvailable(s.id, record.staffType, record.booking))
 }
 
 async function handleAutoSchedule() {
@@ -360,6 +392,57 @@ async function handleAutoSchedule() {
   }
 }
 
+function validateAssignments(finalAssignments) {
+  const errors = []
+  const staffTimeMap = {}
+  const assignmentBookingIds = new Set(finalAssignments.map(a => a.bookingId))
+
+  for (const item of finalAssignments) {
+    const key = `${item.staffType}_${item.staffId}`
+    if (!staffTimeMap[key]) {
+      staffTimeMap[key] = []
+    }
+
+    const bookingStart = timeToMinutes(item.booking.startTime)
+    const bookingEnd = timeToMinutes(item.booking.endTime)
+
+    let schedule
+    if (item.staffType === 'emcee') {
+      schedule = getEmceeSchedule(item.staffId, dateStr.value)
+    } else {
+      schedule = getBandSchedule(item.staffId, dateStr.value)
+    }
+    const otherBookings = schedule.filter(b => b.id !== item.booking.id && !assignmentBookingIds.has(b.id))
+    for (const existing of otherBookings) {
+      const s2 = timeToMinutes(existing.startTime)
+      const e2 = timeToMinutes(existing.endTime)
+      if (bookingStart < e2 && s2 < bookingEnd) {
+        errors.push({
+          item,
+          conflictWith: existing,
+          type: 'existing'
+        })
+      }
+    }
+
+    for (const existing of staffTimeMap[key]) {
+      const s2 = timeToMinutes(existing.booking.startTime)
+      const e2 = timeToMinutes(existing.booking.endTime)
+      if (bookingStart < e2 && s2 < bookingEnd) {
+        errors.push({
+          item,
+          conflictWith: existing.booking,
+          type: 'internal'
+        })
+      }
+    }
+
+    staffTimeMap[key].push(item)
+  }
+
+  return errors
+}
+
 function handleConfirmApply() {
   if (!scheduleResult.value) return
 
@@ -377,6 +460,15 @@ function handleConfirmApply() {
     }
     return item
   })
+
+  const errors = validateAssignments(finalAssignments)
+  if (errors.length > 0) {
+    const errorMsgs = errors.map(e => 
+      `${e.item.booking.deceasedName}（${e.item.staffType === 'emcee' ? '司仪' : '乐队'}）与 ${e.conflictWith.deceasedName || e.conflictWith.deceasedName || '其他预约'} 时间冲突`
+    )
+    message.error(`存在 ${errors.length} 处时间冲突，无法应用：${errorMsgs.slice(0, 2).join('；')}${errors.length > 2 ? '...' : ''}`)
+    return
+  }
 
   const results = applyAssignments(finalAssignments)
   const successCount = results.filter(r => r.success).length

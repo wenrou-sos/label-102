@@ -746,31 +746,49 @@ function getStaffWorkMinutes(staffSchedule) {
   }, 0)
 }
 
+function getConflictBookingIds(date) {
+  const conflicts = detectStaffConflicts(date)
+  const conflictBookingIds = new Set()
+  conflicts.forEach(c => {
+    conflictBookingIds.add(c.booking1.id)
+    conflictBookingIds.add(c.booking2.id)
+  })
+  return conflictBookingIds
+}
+
 export function autoAssignStaff(date) {
   const dayBookings = getBookings().filter(b => b.date === date && b.status !== 'cancelled')
   const onDutyEmcees = emcees.filter(e => e.status === 'on-duty')
   const onDutyBands = bands.filter(b => b.status === 'on-duty')
 
+  const conflictBookingIds = getConflictBookingIds(date)
+
   const emceeNeededBookings = dayBookings
-    .filter(b => b.services.includes('emcee') && !b.emceeId)
+    .filter(b => b.services.includes('emcee') && (!b.emceeId || conflictBookingIds.has(b.id)))
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 
   const bandNeededBookings = dayBookings
-    .filter(b => b.services.includes('band') && !b.bandId)
+    .filter(b => b.services.includes('band') && (!b.bandId || conflictBookingIds.has(b.id)))
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 
   const emceeSchedules = {}
-  onDutyEmcees.forEach(e => { emceeSchedules[e.id] = getEmceeSchedule(e.id, date) })
+  onDutyEmcees.forEach(e => {
+    emceeSchedules[e.id] = getEmceeSchedule(e.id, date).filter(b => !conflictBookingIds.has(b.id))
+  })
 
   const bandSchedules = {}
-  onDutyBands.forEach(b => { bandSchedules[b.id] = getBandSchedule(b.id, date) })
+  onDutyBands.forEach(b => {
+    bandSchedules[b.id] = getBandSchedule(b.id, date).filter(b => !conflictBookingIds.has(b.id))
+  })
 
   const assignments = []
   const failedAssignments = []
+  const reassignedIds = new Set()
 
   for (const booking of emceeNeededBookings) {
     const bookingStart = timeToMinutes(booking.startTime)
     const bookingEnd = timeToMinutes(booking.endTime)
+    const isReassign = !!booking.emceeId
 
     const candidates = onDutyEmcees
       .filter(emcee => isStaffAvailable(emceeSchedules[emcee.id], bookingStart, bookingEnd))
@@ -791,15 +809,19 @@ export function autoAssignStaff(date) {
         staffType: 'emcee',
         staffId: selected.id,
         staffName: selected.name,
-        staffInfo: selected
+        staffInfo: selected,
+        isReassign,
+        originalStaffId: booking.emceeId || null
       })
       emceeSchedules[selected.id].push(booking)
+      reassignedIds.add(booking.id)
     } else {
       failedAssignments.push({
         bookingId: booking.id,
         booking,
         staffType: 'emcee',
-        reason: '无空闲司仪'
+        reason: isReassign ? '重新分配失败：无空闲司仪' : '无空闲司仪',
+        isReassign
       })
     }
   }
@@ -807,6 +829,7 @@ export function autoAssignStaff(date) {
   for (const booking of bandNeededBookings) {
     const bookingStart = timeToMinutes(booking.startTime)
     const bookingEnd = timeToMinutes(booking.endTime)
+    const isReassign = !!booking.bandId
 
     const candidates = onDutyBands
       .filter(band => isStaffAvailable(bandSchedules[band.id], bookingStart, bookingEnd))
@@ -827,15 +850,19 @@ export function autoAssignStaff(date) {
         staffType: 'band',
         staffId: selected.id,
         staffName: selected.name,
-        staffInfo: selected
+        staffInfo: selected,
+        isReassign,
+        originalStaffId: booking.bandId || null
       })
       bandSchedules[selected.id].push(booking)
+      reassignedIds.add(booking.id)
     } else {
       failedAssignments.push({
         bookingId: booking.id,
         booking,
         staffType: 'band',
-        reason: '无空闲乐队'
+        reason: isReassign ? '重新分配失败：无空闲乐队' : '无空闲乐队',
+        isReassign
       })
     }
   }
@@ -844,6 +871,9 @@ export function autoAssignStaff(date) {
   const bandAssigned = assignments.filter(a => a.staffType === 'band').length
   const emceeFailed = failedAssignments.filter(f => f.staffType === 'emcee').length
   const bandFailed = failedAssignments.filter(f => f.staffType === 'band').length
+  const emceeReassign = assignments.filter(a => a.staffType === 'emcee' && a.isReassign).length
+  const bandReassign = assignments.filter(a => a.staffType === 'band' && a.isReassign).length
+  const conflictCount = conflictBookingIds.size
 
   return {
     assignments,
@@ -859,7 +889,11 @@ export function autoAssignStaff(date) {
       totalAssigned: emceeAssigned + bandAssigned,
       totalFailed: emceeFailed + bandFailed,
       onDutyEmcees: onDutyEmcees.length,
-      onDutyBands: onDutyBands.length
+      onDutyBands: onDutyBands.length,
+      conflictCount,
+      emceeReassign,
+      bandReassign,
+      totalReassign: emceeReassign + bandReassign
     }
   }
 }
