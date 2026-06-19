@@ -235,6 +235,46 @@
       <div class="stats-section">
         <HallUsageRanking :data="weekStats.hallUsage" title="各厅室使用率排行（周）" />
       </div>
+
+      <div class="stats-section">
+        <div class="section-header">
+          <h4 class="section-title">高峰期使用率趋势（周）</h4>
+          <div class="section-stats">
+            <span class="peak-stat">高峰期综合使用率：<strong>{{ weekStats.peakHourUsage }}%</strong></span>
+          </div>
+        </div>
+        <BarChart
+          :data="getPeakHourChartData(weekStats.peakHourTrend)"
+          title="各时段使用率分布"
+          tooltip-label="使用率"
+          y-axis-unit="%"
+        />
+      </div>
+
+      <a-row :gutter="[16, 16]">
+        <a-col :xs="24" :md="12">
+          <div class="stats-section">
+            <h4 class="section-title">司仪负载分布（周）</h4>
+            <BarChart
+              :data="getStaffChartData(weekStats.emceeLoad, '#4facfe')"
+              tooltip-label="负载率"
+              y-axis-unit="%"
+              :bar-color="'#4facfe'"
+            />
+          </div>
+        </a-col>
+        <a-col :xs="24" :md="12">
+          <div class="stats-section">
+            <h4 class="section-title">乐队负载分布（周）</h4>
+            <BarChart
+              :data="getStaffChartData(weekStats.bandLoad, '#43e97b')"
+              tooltip-label="负载率"
+              y-axis-unit="%"
+              :bar-color="'#43e97b'"
+            />
+          </div>
+        </a-col>
+      </a-row>
     </template>
 
     <template v-if="activeTab === 'month'">
@@ -310,6 +350,47 @@
       <div class="stats-section">
         <HallUsageRanking :data="monthStats.hallUsage" title="各厅室使用率排行（月）" />
       </div>
+
+      <div class="stats-section">
+        <div class="section-header">
+          <h4 class="section-title">高峰期使用率趋势（月）</h4>
+          <div class="section-stats">
+            <span class="peak-stat">高峰期综合使用率：<strong>{{ monthStats.peakHourUsage }}%</strong></span>
+          </div>
+        </div>
+        <BarChart
+          :data="getPeakHourChartData(monthStats.peakHourTrend)"
+          title="各时段使用率分布"
+          tooltip-label="使用率"
+          y-axis-unit="%"
+          :bar-color="'#722ed1'"
+        />
+      </div>
+
+      <a-row :gutter="[16, 16]">
+        <a-col :xs="24" :md="12">
+          <div class="stats-section">
+            <h4 class="section-title">司仪负载分布（月）</h4>
+            <BarChart
+              :data="getStaffChartData(monthStats.emceeLoad, '#4facfe')"
+              tooltip-label="负载率"
+              y-axis-unit="%"
+              :bar-color="'#4facfe'"
+            />
+          </div>
+        </a-col>
+        <a-col :xs="24" :md="12">
+          <div class="stats-section">
+            <h4 class="section-title">乐队负载分布（月）</h4>
+            <BarChart
+              :data="getStaffChartData(monthStats.bandLoad, '#43e97b')"
+              tooltip-label="负载率"
+              y-axis-unit="%"
+              :bar-color="'#43e97b'"
+            />
+          </div>
+        </a-col>
+      </a-row>
     </template>
   </div>
 </template>
@@ -328,6 +409,7 @@ import { HALL_TYPES, HALL_TYPE_LABELS } from '../data/mockData.js'
 import { getWeeklyStatistics, getMonthlyStatistics } from '../utils/scheduleUtils.js'
 import TrendChart from './TrendChart.vue'
 import HallUsageRanking from './HallUsageRanking.vue'
+import BarChart from './BarChart.vue'
 
 const props = defineProps({
   stats: {
@@ -366,6 +448,26 @@ const dayHallTypeStats = computed(() => {
 function getDayServicePercentage(service) {
   const total = props.stats.totalBookings || 1
   return ((props.stats.serviceCount[service] || 0) / total) * 100
+}
+
+function getPeakHourChartData(trendData) {
+  return trendData.map(item => ({
+    label: item.label,
+    subLabel: item.subLabel,
+    value: item.value,
+    color: item.isPeak ? '#fa8c16' : '#1890ff',
+    extra: `${item.bookingCount} 场预约`
+  }))
+}
+
+function getStaffChartData(staffData, defaultColor) {
+  return staffData.slice(0, 6).map(item => ({
+    label: item.label,
+    subLabel: item.subLabel,
+    value: item.value,
+    color: item.loadRate > 70 ? '#f5222d' : (item.loadRate > 50 ? '#fa8c16' : defaultColor),
+    extra: item.extra
+  }))
 }
 </script>
 
@@ -598,6 +700,35 @@ function getDayServicePercentage(service) {
   align-items: center;
   font-size: 12px;
   color: #d46b08;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.section-header .section-title {
+  margin: 0;
+}
+
+.section-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.peak-stat {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.peak-stat strong {
+  color: #fa8c16;
+  font-weight: 600;
+  margin-left: 4px;
 }
 
 @media (max-width: 768px) {

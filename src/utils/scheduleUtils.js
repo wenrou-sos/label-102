@@ -358,6 +358,120 @@ function calculateUsageRate(bookingsList, hallCount, days = 1) {
     : 0
 }
 
+export function getHallUsageTrend(hallId, endDate, days = 7) {
+  const end = dayjs(endDate)
+  const dates = []
+  for (let i = days - 1; i >= 0; i--) {
+    dates.push(end.subtract(i, 'day').format('YYYY-MM-DD'))
+  }
+
+  return dates.map(date => {
+    const dayBookings = allBookings.filter(b => b.date === date && b.hallId === hallId)
+    const dateObj = dayjs(date)
+    return {
+      date,
+      label: `${dateObj.month() + 1}/${dateObj.date()}`,
+      bookingCount: dayBookings.length,
+      usageRate: calculateUsageRate(dayBookings, 1)
+    }
+  })
+}
+
+function calculateHourlyUsage(bookingsList, hallCount, startHour, endHour) {
+  const totalMinutes = (endHour - startHour) * 60 * hallCount
+  let usedMinutes = 0
+
+  bookingsList.forEach(booking => {
+    const bookingStart = timeToMinutes(booking.startTime)
+    const bookingEnd = timeToMinutes(booking.endTime)
+    const periodStart = startHour * 60
+    const periodEnd = endHour * 60
+    const overlapStart = Math.max(bookingStart, periodStart)
+    const overlapEnd = Math.min(bookingEnd, periodEnd)
+    if (overlapEnd > overlapStart) {
+      usedMinutes += (overlapEnd - overlapStart)
+    }
+  })
+
+  return totalMinutes > 0 ? Number(((usedMinutes / totalMinutes) * 100).toFixed(1)) : 0
+}
+
+export function getPeakHourTrend(bookingsList, hallCount) {
+  const hours = []
+  for (let h = TIME_SLOT_START; h < TIME_SLOT_END; h++) {
+    const usageRate = calculateHourlyUsage(bookingsList, hallCount, h, h + 1)
+    const bookingCount = bookingsList.filter(b => {
+      const startHour = parseInt(b.startTime.split(':')[0])
+      return startHour === h
+    }).length
+    hours.push({
+      hour: h,
+      label: `${String(h).padStart(2, '0')}:00`,
+      subLabel: h >= PEAK_START_HOUR && h < PEAK_END_HOUR ? '高峰' : '',
+      value: usageRate,
+      bookingCount,
+      isPeak: h >= PEAK_START_HOUR && h < PEAK_END_HOUR
+    })
+  }
+  return hours
+}
+
+export function getStaffLoadStats(bookingsList, staffList, staffType, days = 1) {
+  const loadMap = {}
+  const workMinutesPerDay = (TIME_SLOT_END - TIME_SLOT_START) * 60
+
+  bookingsList.forEach(booking => {
+    const staffId = staffType === 'emcee' ? booking.emceeId : booking.bandId
+    if (staffId) {
+      if (!loadMap[staffId]) {
+        loadMap[staffId] = { bookingCount: 0, usedMinutes: 0 }
+      }
+      loadMap[staffId].bookingCount++
+      loadMap[staffId].usedMinutes += (timeToMinutes(booking.endTime) - timeToMinutes(booking.startTime))
+    }
+  })
+
+  return staffList
+    .filter(s => s.status === 'on-duty')
+    .map(staff => {
+      const stats = loadMap[staff.id] || { bookingCount: 0, usedMinutes: 0 }
+      const totalAvailableMinutes = workMinutesPerDay * days
+      const loadRate = totalAvailableMinutes > 0
+        ? Number(((stats.usedMinutes / totalAvailableMinutes) * 100).toFixed(1))
+        : 0
+      return {
+        ...staff,
+        bookingCount: stats.bookingCount,
+        usedMinutes: stats.usedMinutes,
+        loadRate,
+        value: loadRate,
+        label: staff.name,
+        subLabel: `${stats.bookingCount}场`,
+        extra: `累计服务 ${Math.round(stats.usedMinutes / 60 * 10) / 10} 小时`
+      }
+    })
+    .sort((a, b) => b.loadRate - a.loadRate)
+}
+
+function getPeakHourUsage(weeklyBookings, hallCount) {
+  const peakStart = PEAK_START_HOUR * 60
+  const peakEnd = PEAK_END_HOUR * 60
+  const totalPeakMinutes = (peakEnd - peakStart) * hallCount
+
+  let peakUsedMinutes = 0
+  weeklyBookings.forEach(booking => {
+    const bookingStart = timeToMinutes(booking.startTime)
+    const bookingEnd = timeToMinutes(booking.endTime)
+    const overlapStart = Math.max(bookingStart, peakStart)
+    const overlapEnd = Math.min(bookingEnd, peakEnd)
+    if (overlapEnd > overlapStart) {
+      peakUsedMinutes += (overlapEnd - overlapStart)
+    }
+  })
+
+  return totalPeakMinutes > 0 ? Number(((peakUsedMinutes / totalPeakMinutes) * 100).toFixed(1)) : 0
+}
+
 export function getWeeklyStatistics(endDate) {
   const end = dayjs(endDate)
   const startOfWeek = end.startOf('week').add(1, 'day')
@@ -421,6 +535,11 @@ export function getWeeklyStatistics(endDate) {
     ) : 0
   })
 
+  const peakHourTrend = getPeakHourTrend(weekBookings, halls.length)
+  const emceeLoad = getStaffLoadStats(weekBookings, emcees, 'emcee', dayCount)
+  const bandLoad = getStaffLoadStats(weekBookings, bands, 'band', dayCount)
+  const peakHourUsage = getPeakHourUsage(weekBookings, halls.length)
+
   return {
     dailyData,
     hallUsage,
@@ -428,7 +547,11 @@ export function getWeeklyStatistics(endDate) {
     avgDailyBookings,
     overallUsageRate,
     hallTypeUsage,
-    dateRange: `${validDates[0]} 至 ${validDates[validDates.length - 1]}（本周一至今日，共${dayCount}天）`
+    dateRange: `${validDates[0]} 至 ${validDates[validDates.length - 1]}（本周一至今日，共${dayCount}天）`,
+    peakHourTrend,
+    emceeLoad,
+    bandLoad,
+    peakHourUsage
   }
 }
 
@@ -495,6 +618,11 @@ export function getMonthlyStatistics(endDate) {
     ) : 0
   })
 
+  const peakHourTrend = getPeakHourTrend(monthBookings, halls.length)
+  const emceeLoad = getStaffLoadStats(monthBookings, emcees, 'emcee', validDayCount)
+  const bandLoad = getStaffLoadStats(monthBookings, bands, 'band', validDayCount)
+  const peakHourUsage = getPeakHourUsage(monthBookings, halls.length)
+
   return {
     weekData,
     hallUsage,
@@ -503,25 +631,10 @@ export function getMonthlyStatistics(endDate) {
     overallUsageRate,
     hallTypeUsage,
     monthLabel: `${end.year()}年${end.month() + 1}月`,
-    daysInMonth: validDayCount
+    daysInMonth: validDayCount,
+    peakHourTrend,
+    emceeLoad,
+    bandLoad,
+    peakHourUsage
   }
-}
-
-export function getHallUsageTrend(hallId, endDate, days = 7) {
-  const end = dayjs(endDate)
-  const dates = []
-  for (let i = days - 1; i >= 0; i--) {
-    dates.push(end.subtract(i, 'day').format('YYYY-MM-DD'))
-  }
-
-  return dates.map(date => {
-    const dayBookings = allBookings.filter(b => b.date === date && b.hallId === hallId)
-    const dateObj = dayjs(date)
-    return {
-      date,
-      label: `${dateObj.month() + 1}/${dateObj.date()}`,
-      bookingCount: dayBookings.length,
-      usageRate: calculateUsageRate(dayBookings, 1)
-    }
-  })
 }
